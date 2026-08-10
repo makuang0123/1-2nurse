@@ -25,19 +25,19 @@ ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clini
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (包含潮州院所 10 位護理人員清冊)
+# 1. 預設資料庫 (含有顏色標籤燈號 🟢符合 / 🔴不符合)
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "符合資格": "符合", "符合原因": "調薪", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "李晨寧", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "符合", "符合原因": "調薪", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "林庭如", "執業類別": "護理師", "身份": "新進人員", "符合資格": "符合", "符合原因": "新到職符合級距", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "梁淑雅", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "不符合", "符合原因": "無", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "洪羿羚", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "符合", "符合原因": "調薪", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "莊羽樺", "執業類別": "護理師", "身份": "新進人員", "符合資格": "符合", "符合原因": "新到職符合級距", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "蔡函紜", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "不符合", "符合原因": "無", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "趙育萱", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "不符合", "符合原因": "無", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "陳靖誼", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "符合", "符合原因": "調薪", "狀態": "在職"},
-    {"區域": "屏東", "院所": "潮州院所", "姓名": "黃玉芬", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "不符合", "符合原因": "無", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "符合資格": "🟢 符合", "符合原因": "調薪", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "李晨寧", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🟢 符合", "符合原因": "調薪", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "林庭如", "執業類別": "護理師", "身份": "新進人員", "符合資格": "🟢 符合", "符合原因": "新到職符合級距", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "梁淑雅", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🔴 不符合", "符合原因": "無", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "洪羿羚", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🟢 符合", "符合原因": "調薪", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "莊羽樺", "執業類別": "護理師", "身份": "新進人員", "符合資格": "🟢 符合", "符合原因": "新到職符合級距", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "蔡函紜", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🔴 不符合", "符合原因": "無", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "趙育萱", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🔴 不符合", "符合原因": "無", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "陳靖誼", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🟢 符合", "符合原因": "調薪", "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "黃玉芬", "執業類別": "護理師", "身份": "舊有員工", "符合資格": "🔴 不符合", "符合原因": "無", "狀態": "在職"},
 ]
 
 if 'db_staff' not in st.session_state:
@@ -53,12 +53,16 @@ if 'db_staff' not in st.session_state:
 
 staff_df = st.session_state.db_staff
 
+# 舊版選項自動相容修正 (將舊版的 "符合" 改為 "🟢 符合")
+if not staff_df.empty and "符合資格" in staff_df.columns:
+    staff_df["符合資格"] = staff_df["符合資格"].replace({"符合": "🟢 符合", "不符合": "🔴 不符合"})
+
 # 補齊必要欄位與區域
 required_cols = ["區域", "院所", "姓名", "執業類別", "身份", "符合資格", "符合原因", "狀態"]
 for col in required_cols:
     if col not in staff_df.columns:
         if col == "符合資格":
-            staff_df[col] = "不符合"
+            staff_df[col] = "🔴 不符合"
         elif col == "符合原因":
             staff_df[col] = "無"
         elif col == "身份":
@@ -150,11 +154,10 @@ if user["role"] == "會計":
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
 
-    # 預先扣除「離職人員」計算下個月實際在職人數
     clinic_df_next_month = df[(df['院所'] == selected_clinic) & (df['狀態'] != '離職')]
     
     total_nurses_next_month = len(clinic_df_next_month)
-    compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'] == '符合'])
+    compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
     target_needed = math.ceil(total_nurses_next_month / 2) if total_nurses_next_month > 0 else 0
     is_passed = compliant_nurses_next_month >= target_needed and total_nurses_next_month > 0
 
@@ -169,7 +172,7 @@ if user["role"] == "會計":
         col4.error("🔴 下個月預估審核：未達標！")
 
     st.markdown("---")
-    st.write("✏️ **護理人員資格下拉勾選（修改完成後請點下方儲存按鈕）**")
+    st.write("✏️ **護理人員資格下拉勾選（標有 🟢 / 🔴 燈號標誌）**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -181,7 +184,7 @@ if user["role"] == "會計":
             "姓名": st.column_config.TextColumn("姓名", disabled=True),
             "執業類別": st.column_config.TextColumn("類別", disabled=True),
             "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
-            "符合資格": st.column_config.SelectboxColumn("符合資格", options=["符合", "不符合"], required=True),
+            "符合資格": st.column_config.SelectboxColumn("符合資格", options=["🟢 符合", "🔴 不符合"], required=True),
             "符合原因": st.column_config.SelectboxColumn("符合原因", options=["調薪", "新到職符合級距", "無"], required=True),
             "狀態": st.column_config.SelectboxColumn("狀態 (離職下月扣除)", options=["在職", "離職"], required=True),
         },
@@ -202,7 +205,7 @@ if user["role"] == "會計":
             new_name = st.text_input("姓名")
             new_title = st.selectbox("執業類別", ["護理師", "護士"])
             new_type = st.selectbox("身份別", ["舊有員工", "新進人員"])
-            new_qual = st.selectbox("符合資格", ["符合", "不符合"])
+            new_qual = st.selectbox("符合資格", ["🟢 符合", "🔴 不符合"])
             new_reason = st.selectbox("符合原因", ["調薪", "新到職符合級距", "無"])
             if st.form_submit_button("新增該人員"):
                 if new_name:
@@ -216,15 +219,13 @@ if user["role"] == "會計":
                     st.rerun()
 
 # ===================================================================
-# --- 模式 B：HR 總管理者端 (全權限檢視、匯入與編修) ---
+# --- 模式 B：HR 總管理者端 (包含 🟢/🔴 燈號下拉編輯) ---
 # ===================================================================
 else:
     st.subheader("📊 全院所護理人員下月執登卡控 - HR總表")
     
-    # ---------------------------------------------------------------
-    # 1. 清冊匯入區
-    # ---------------------------------------------------------------
-    with st.expander("📄 上傳各院健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」持續更新資料", expanded=True):
+    # 1. 匯入清冊
+    with st.expander("📄 上傳各院健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」持續更新資料", expanded=False):
         st.write("上傳清冊後，系統會自動比對並**新增未在名冊中的新執登護理師/護士**。")
         col_r, col_c, col_f = st.columns([1, 1, 2])
         target_region = col_r.selectbox("選擇大項【區域】：", list(CLINIC_REGIONS.keys()), key="hr_import_reg")
@@ -247,13 +248,13 @@ else:
                             if row['姓名'] not in existing_names:
                                 new_rows.append({
                                     "區域": target_region, "院所": target_clinic, "姓名": row['姓名'],
-                                    "執業類別": row['執業類別'], "身份": "舊有員工", "符合資格": "不符合",
+                                    "執業類別": row['執業類別'], "身份": "舊有員工", "符合資格": "🔴 不符合",
                                     "符合原因": "無", "狀態": "在職"
                                 })
                                 added_count += 1
                         
                         if new_rows:
-                            merged_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
+                            merged_df = pd.concat([staff_df, pd.DataFrame([new_rows])], ignore_index=True)
                             save_data(merged_df)
                             st.balloons()
                             st.success(f"✅ 更新成功！新增了 {added_count} 位新護理人員！")
@@ -265,9 +266,7 @@ else:
 
     st.markdown("---")
 
-    # ---------------------------------------------------------------
-    # 2. 全院卡控總表 (按區域篩選)
-    # ---------------------------------------------------------------
+    # 2. 全院卡控總表
     st.write("🔍 **總表區域篩選**")
     filter_region = st.selectbox("選擇要檢視的區域（或顯示全部）：", ["全部區域"] + list(CLINIC_REGIONS.keys()))
 
@@ -278,7 +277,7 @@ else:
         c_region = CLINIC_TO_REGION.get(c, "")
         c_df_next_month = df[(df['院所'] == c) & (df['狀態'] != '離職')] if '院所' in df.columns else pd.DataFrame()
         tot = len(c_df_next_month)
-        comp = len(c_df_next_month[c_df_next_month['符合資格'] == '符合']) if tot > 0 else 0
+        comp = len(c_df_next_month[c_df_next_month['符合資格'].str.contains('符合', na=False)]) if tot > 0 else 0
         req = math.ceil(tot / 2) if tot > 0 else 0
         status = "🟢 達標" if (comp >= req and tot > 0) else ("⚪ 尚未建立名冊" if tot == 0 else "🔴 未達標")
         
@@ -294,12 +293,9 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.table(summary_df)
 
-    # ---------------------------------------------------------------
-    # 3. 🌟 人資專用：進入各家院所查看與修改人員明細 (大項區域 ➜ 小項院所)
-    # ---------------------------------------------------------------
+    # 3. HR 檢視與調整各院所人員明細 (包含 🟢/🔴 燈號選單)
     st.markdown("---")
     st.subheader("📋 HR 深入檢視與調整各院所人員明細")
-    st.write("請使用下方連動選單選擇欲查看的院所，即可即時查看 KPI 及修改護理師名單：")
     
     col_hr_detail_r, col_hr_detail_c = st.columns(2)
     hr_view_region = col_hr_detail_r.selectbox("1. 選擇大項【區域】：", list(CLINIC_REGIONS.keys()), key="hr_view_reg")
@@ -307,10 +303,9 @@ else:
 
     st.markdown(f"#### 📍【{hr_view_region}區】{hr_view_clinic} - 下月預估現況")
 
-    # 即時計算該院所的 KPI 數據
     hr_clinic_df_next_month = df[(df['院所'] == hr_view_clinic) & (df['狀態'] != '離職')]
     hr_tot = len(hr_clinic_df_next_month)
-    hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'] == '符合'])
+    hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
     hr_req = math.ceil(hr_tot / 2) if hr_tot > 0 else 0
     hr_passed = hr_comp >= hr_req and hr_tot > 0
 
@@ -324,7 +319,6 @@ else:
     else:
         col_k4.error("🔴 預估審核結果：未達標！")
 
-    # 顯示該院所護理師互動編輯表格
     hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy()
     
     if not hr_editable_df.empty:
@@ -337,7 +331,7 @@ else:
                 "姓名": st.column_config.TextColumn("姓名"),
                 "執業類別": st.column_config.TextColumn("類別"),
                 "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
-                "符合資格": st.column_config.SelectboxColumn("符合資格", options=["符合", "不符合"], required=True),
+                "符合資格": st.column_config.SelectboxColumn("符合資格", options=["🟢 符合", "🔴 不符合"], required=True),
                 "符合原因": st.column_config.SelectboxColumn("符合原因", options=["調薪", "新到職符合級距", "無"], required=True),
                 "狀態": st.column_config.SelectboxColumn("狀態 (離職下月扣除)", options=["在職", "離職"], required=True),
             },
@@ -352,13 +346,12 @@ else:
             st.success(f"✅ 已成功更新 [{hr_view_clinic}] 的人員資料！")
             st.rerun()
             
-        # 人資手動新增名單外人員
         with st.expander(f"➕ 手動新增名冊外人員至 [{hr_view_clinic}]"):
             with st.form("hr_add_single_nurse"):
                 hr_new_name = st.text_input("姓名")
                 hr_new_title = st.selectbox("執業類別", ["護理師", "護士"])
                 hr_new_type = st.selectbox("身份別", ["舊有員工", "新進人員"])
-                hr_new_qual = st.selectbox("符合資格", ["符合", "不符合"])
+                hr_new_qual = st.selectbox("符合資格", ["🟢 符合", "🔴 不符合"])
                 hr_new_reason = st.selectbox("符合原因", ["調薪", "新到職符合級距", "無"])
                 if st.form_submit_button("新增該人員"):
                     if hr_new_name:
@@ -373,9 +366,7 @@ else:
     else:
         st.info(f"💡 目前【{hr_view_clinic}】尚未建立人員名冊，可利用頁面上方方塊上傳該院所的醫事人員執業清冊。")
 
-    # ---------------------------------------------------------------
     # 4. LINE 推播區
-    # ---------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔔 LINE 官方帳號 - 私訊催辦推播")
     
