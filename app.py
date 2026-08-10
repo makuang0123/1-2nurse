@@ -33,7 +33,6 @@ staff_df = load_data()
 # -------------------------------------------------------------------
 # 2. 帳號密碼與權限登入系統
 # -------------------------------------------------------------------
-# 帳號密碼對照表
 USER_CREDENTIALS = {
     "taipei": {"password": "tp123", "role": "會計", "clinic": "台北院所", "name": "台北會計"},
     "taichung": {"password": "tc123", "role": "會計", "clinic": "台中院所", "name": "台中會計"},
@@ -60,7 +59,6 @@ if not st.session_state.logged_in:
     st.info("👈 請先於左側邊欄輸入帳號密碼登入系統。")
     st.stop()
 
-# 登入後的側邊欄資訊
 user = st.session_state.user_info
 st.sidebar.success(f"👤 歡迎登入：{user['name']}")
 if st.sidebar.button("🚪 登出系統"):
@@ -69,21 +67,18 @@ if st.sidebar.button("🚪 登出系統"):
     st.rerun()
 
 # -------------------------------------------------------------------
-# 3. 業務邏輯與 LINE Messaging API 發送函數 (一對一私訊)
+# 3. 業務邏輯與 LINE Messaging API 發送函數
 # -------------------------------------------------------------------
 def check_compliance(row):
     if row['狀態'] == '離職':
         return False
-    # 條件 1：舊有員工調薪 (級距往上)
     if row['身份'] == '舊有員工' and row['現行級距'] > row['原級距']:
         return True
-    # 條件 2：新進人員投保金額達第四級 (>= 33,300)
     if row['身份'] == '新進人員' and row['投保金額'] >= 33300:
         return True
     return False
 
 def send_line_message(channel_access_token, user_id, message):
-    """使用 LINE Messaging API 推播私訊給特定會計"""
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
         "Content-Type": "application/json",
@@ -91,12 +86,7 @@ def send_line_message(channel_access_token, user_id, message):
     }
     payload = {
         "to": user_id,
-        "messages": [
-            {
-                "type": "text",
-                "text": message
-            }
-        ]
+        "messages": [{"type": "text", "text": message}]
     }
     try:
         response = requests.post(url, headers=headers, json=payload)
@@ -107,7 +97,8 @@ def send_line_message(channel_access_token, user_id, message):
 
 # 計算合規性
 df = staff_df.copy()
-df['符合資格'] = df.apply(check_compliance, axis=1)
+if not df.empty:
+    df['符合資格'] = df.apply(check_compliance, axis=1)
 
 # -------------------------------------------------------------------
 # 4. 畫面展示：會計輸入端 vs HR 總表
@@ -136,8 +127,8 @@ if user["role"] == "會計":
 
     st.markdown("---")
 
-    # 新增人員表單
-    with st.expander("➕ 新增護理人員"):
+    # 手動單筆新增人員
+    with st.expander("➕ 手動新增單筆護理人員"):
         with st.form("add_nurse_form"):
             name = st.text_input("護理師姓名")
             emp_type = st.selectbox("人員身份", ["舊有員工", "新進人員"])
@@ -176,7 +167,40 @@ if user["role"] == "會計":
 else:
     st.subheader("📊 全院所護理人員執登卡控 - HR總表")
     
-    clinics = list(set(df["院所"].tolist()))
+    # 🌟 新功能：批次匯入 Excel 資料
+    with st.expander("📁 批次匯入/覆蓋整份 Excel 護理人員資料", expanded=False):
+        st.write("請選擇含有欄位：`院所`, `姓名`, `身份`, `原級距`, `現行級距`, `投保金額`, `狀態` 的 Excel 檔案。")
+        uploaded_file = st.file_uploader("上傳 Excel 檔案 (.xlsx)", type=["xlsx", "xls"])
+        
+        if uploaded_file is not None:
+            try:
+                excel_df = pd.read_excel(uploaded_file)
+                required_cols = ['院所', '姓名', '身份', '原級距', '現行級距', '投保金額', '狀態']
+                
+                if all(col in excel_df.columns for col in required_cols):
+                    st.write("預覽上傳的 Excel 資料內容：")
+                    st.dataframe(excel_df[required_cols].head(), use_container_width=True)
+                    
+                    import_mode = st.radio("請選擇匯入模式：", ["覆蓋原有全部資料", "累加到既有資料後面"])
+                    
+                    if st.button("🚀 確認將 Excel 資料匯入系統"):
+                        if import_mode == "覆蓋原有全部資料":
+                            final_df = excel_df[required_cols]
+                        else:
+                            final_df = pd.concat([staff_df, excel_df[required_cols]], ignore_index=True)
+                        
+                        conn.update(worksheet="Staff", data=final_df)
+                        st.success("✅ 資料已成功批次匯入並寫入雲端資料庫！")
+                        st.rerun()
+                else:
+                    st.error(f"❌ Excel 欄位標題不符，請確認是否包含：{', '.join(required_cols)}")
+            except Exception as e:
+                st.error(f"檔案讀取失敗：{e}")
+
+    st.markdown("---")
+
+    # 總表顯示
+    clinics = list(set(df["院所"].tolist())) if not df.empty else []
     summary_list = []
     
     for c in clinics:
@@ -199,13 +223,12 @@ else:
     st.markdown("---")
     st.subheader("🔔 LINE 官方帳號 - 私訊催辦推播")
     
-    unpassed = summary_df[summary_df["管控狀態"] == "🔴 未達標"]["院所名稱"].tolist()
+    unpassed = summary_df[summary_df["管控狀態"] == "🔴 未達標"]["院所名稱"].tolist() if not summary_df.empty else []
     
     if unpassed:
         st.warning(f"目前以下院所合規人數未達 1/2 標準：**{', '.join(unpassed)}**")
         selected_notify_clinic = st.selectbox("選擇要發送 LINE 提醒的院所：", unpassed)
         
-        # 金鑰設定區
         line_token = st.text_input("LINE Channel Access Token (機器人金鑰)", type="password", help="於 LINE Developers 後台取得")
         accountant_line_id = st.text_input("該院所會計的個人 LINE User ID (以 U 開頭)", help="會計加機器人好友後可於後台查看")
         
