@@ -21,10 +21,7 @@ CLINIC_REGIONS = {
     "台東": ["台東院所"]
 }
 
-# 展開成所有院所清單
 ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clinics]
-
-# 反向查詢：從院所名稱找區域
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
 # -------------------------------------------------------------------
@@ -50,7 +47,6 @@ def load_data():
                     df[col] = ""
         return df
     except Exception:
-        # 預設範例資料結構
         return pd.DataFrame([
             {"區域": "屏東", "院所": "屏東院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
             {"區域": "屏東", "院所": "屏東院所", "姓名": "李晨寧", "執業類別": "護理師", "身份": "新進人員", "舊員是否調薪": False, "新進級距": 4, "投保金額": 33300, "狀態": "在職"},
@@ -59,12 +55,11 @@ def load_data():
 
 staff_df = load_data()
 
-# 自動補齊「區域」欄位（若舊資料未填寫區域）
 if not staff_df.empty and "院所" in staff_df.columns:
     staff_df["區域"] = staff_df["院所"].map(lambda x: CLINIC_TO_REGION.get(x, "其他"))
 
 # -------------------------------------------------------------------
-# 2. 帳號密碼與權限登入系統
+# 2. 帳號密碼與權限登入系統 (修正表單登入機制)
 # -------------------------------------------------------------------
 USER_CREDENTIALS = {
     "admin": {"password": "admin123", "role": "HR總管理者", "name": "HR人資部"},
@@ -77,18 +72,23 @@ if "logged_in" not in st.session_state:
 
 if not st.session_state.logged_in:
     st.sidebar.subheader("🔒 系統登入")
-    username_input = st.sidebar.text_input("帳號 (username)")
-    password_input = st.sidebar.text_input("密碼 (password)", type="password")
     
-    if st.sidebar.button("登入"):
-        if username_input in USER_CREDENTIALS and USER_CREDENTIALS[username_input]["password"] == password_input:
-            st.session_state.logged_in = True
-            st.session_state.user_info = USER_CREDENTIALS[username_input]
-            st.rerun()
-        else:
-            st.sidebar.error("❌ 帳號或密碼錯誤！")
+    # 改用 form 表單包裹，避免輸入欄位重整後刷掉
+    with st.sidebar.form("login_form"):
+        username_input = st.text_input("帳號 (username)").strip()
+        password_input = st.text_input("密碼 (password)", type="password").strip()
+        submit_button = st.form_submit_button("登入系統")
+        
+        if submit_button:
+            if username_input in USER_CREDENTIALS and USER_CREDENTIALS[username_input]["password"] == password_input:
+                st.session_state.logged_in = True
+                st.session_state.user_info = USER_CREDENTIALS[username_input]
+                st.rerun()
+            else:
+                st.error("❌ 帳號或密碼錯誤！")
     
-    st.info("👈 請先於左側邊欄輸入帳號密碼登入系統。\n\n*預設帳號：*\n- HR管理者：`admin` / `admin123`\n- 院所會計：`accountant` / `act123`")
+    # 乾淨提示，不顯示預設密碼
+    st.info("👈 請於左側邊欄輸入管理帳號密碼登入系統。")
     st.stop()
 
 user = st.session_state.user_info
@@ -135,7 +135,6 @@ if user["role"] == "會計":
     st.sidebar.markdown("---")
     st.sidebar.subheader("📍 選擇服務院所")
     
-    # 🌟 兩階層連動下拉選單
     selected_region = st.sidebar.selectbox("1. 請先選擇大項「區域」：", list(CLINIC_REGIONS.keys()))
     available_clinics = CLINIC_REGIONS[selected_region]
     selected_clinic = st.sidebar.selectbox("2. 再選擇小項「院所」：", available_clinics)
@@ -210,7 +209,6 @@ if user["role"] == "會計":
 else:
     st.subheader("📊 全院所護理人員執登卡控 - HR總表")
     
-    # 🌟 匯入執業清冊（支援區域連動選擇）
     with st.expander("📄 上傳各院健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」持續更新資料", expanded=True):
         st.write("上傳清冊後，系統會自動比對並**新增未在名冊中的新執登護理師/護士**，同時保持既有歷史資料。")
         
@@ -262,13 +260,10 @@ else:
 
     st.markdown("---")
 
-    # HR 總表區域篩選器
     st.write("🔍 **總表區域篩選**")
     filter_region = st.selectbox("選擇要檢視的區域（或顯示全部）：", ["全部區域"] + list(CLINIC_REGIONS.keys()))
 
-    # 總表統計顯示
     summary_list = []
-    
     display_clinics = ALL_CLINICS if filter_region == "全部區域" else CLINIC_REGIONS[filter_region]
     
     for c in display_clinics:
