@@ -25,7 +25,7 @@ ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clini
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (含有顏色標籤燈號 🟢符合 / 🔴不符合)
+# 1. 預設資料庫 (包含潮州院所 10 位護理人員清冊)
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "符合資格": "🟢 符合", "符合原因": "調薪", "狀態": "在職"},
@@ -44,7 +44,7 @@ if 'db_staff' not in st.session_state:
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_cloud = conn.read(worksheet="Staff", ttl=0)
-        if not df_cloud.empty:
+        if not df_cloud.empty and len(df_cloud) > 0:
             st.session_state.db_staff = df_cloud
         else:
             st.session_state.db_staff = pd.DataFrame(DEFAULT_NURSES)
@@ -53,11 +53,10 @@ if 'db_staff' not in st.session_state:
 
 staff_df = st.session_state.db_staff
 
-# 舊版選項自動相容修正 (將舊版的 "符合" 改為 "🟢 符合")
+# 舊版相容修正
 if not staff_df.empty and "符合資格" in staff_df.columns:
     staff_df["符合資格"] = staff_df["符合資格"].replace({"符合": "🟢 符合", "不符合": "🔴 不符合"})
 
-# 補齊必要欄位與區域
 required_cols = ["區域", "院所", "姓名", "執業類別", "身份", "符合資格", "符合原因", "狀態"]
 for col in required_cols:
     if col not in staff_df.columns:
@@ -117,7 +116,7 @@ if st.sidebar.button("🚪 登出系統"):
 # 3. 資料儲存與 LINE 發送函數
 # -------------------------------------------------------------------
 def save_data(new_df):
-    st.session_state.db_staff = new_df
+    st.session_state.db_staff = new_df.copy()
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         conn.update(worksheet="Staff", data=new_df)
@@ -139,7 +138,16 @@ def send_line_message(channel_access_token, user_id, message):
 # 4. 畫面展示：會計試算/勾選端 vs HR 總表
 # -------------------------------------------------------------------
 
-df = staff_df.copy()
+# 頂部導覽列備份下載按鈕
+st.sidebar.markdown("---")
+st.sidebar.subheader("📥 系統資料備份與匯出")
+csv_data = staff_df.to_csv(index=False).encode('utf-8-sig')
+st.sidebar.download_button(
+    label="💾 匯出最新完整資料庫 (.csv)",
+    data=csv_data,
+    file_name="nurse_control_master.csv",
+    mime="text/csv"
+)
 
 # ===================================================================
 # --- 模式 A：院所會計輸入/勾選端 ---
@@ -154,7 +162,7 @@ if user["role"] == "會計":
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
 
-    clinic_df_next_month = df[(df['院所'] == selected_clinic) & (df['狀態'] != '離職')]
+    clinic_df_next_month = staff_df[(staff_df['院所'] == selected_clinic) & (staff_df['狀態'] != '離職')]
     
     total_nurses_next_month = len(clinic_df_next_month)
     compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
@@ -172,7 +180,7 @@ if user["role"] == "會計":
         col4.error("🔴 下個月預估審核：未達標！")
 
     st.markdown("---")
-    st.write("✏️ **護理人員資格下拉勾選（標有 🟢 / 🔴 燈號標誌）**")
+    st.write("✏️ **護理人員資格下拉勾選（修改完成後請點下方儲存按鈕）**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -194,7 +202,8 @@ if user["role"] == "會計":
     )
 
     if st.button("💾 儲存並更新變更"):
-        staff_df.update(edited_df)
+        # 精準對齊索引替換全域資料
+        staff_df.loc[staff_df['院所'] == selected_clinic, :] = edited_df.values
         save_data(staff_df)
         st.success("✅ 修改內容已成功儲存！")
         st.rerun()
@@ -219,54 +228,64 @@ if user["role"] == "會計":
                     st.rerun()
 
 # ===================================================================
-# --- 模式 B：HR 總管理者端 (包含 🟢/🔴 燈號下拉編輯) ---
+# --- 模式 B：HR 總管理者端 (全權限檢視、匯入與編修) ---
 # ===================================================================
 else:
     st.subheader("📊 全院所護理人員下月執登卡控 - HR總表")
     
-    # 1. 匯入清冊
-    with st.expander("📄 上傳各院健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」持續更新資料", expanded=False):
-        st.write("上傳清冊後，系統會自動比對並**新增未在名冊中的新執登護理師/護士**。")
+    # ---------------------------------------------------------------
+    # 1. 清冊匯入區
+    # ---------------------------------------------------------------
+    with st.expander("📄 上傳各院健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」或「備份資料庫 (.csv)」", expanded=False):
+        st.write("可上傳健保局清冊（自動提取護理師/護士）或歷史備份檔：")
         col_r, col_c, col_f = st.columns([1, 1, 2])
         target_region = col_r.selectbox("選擇大項【區域】：", list(CLINIC_REGIONS.keys()), key="hr_import_reg")
         target_clinic = col_c.selectbox("選擇小項【院所】：", CLINIC_REGIONS[target_region], key="hr_import_cli")
-        prsn_file = col_f.file_uploader("選擇執業清冊 (.xls / .xlsx)", type=["xls", "xlsx"])
+        prsn_file = col_f.file_uploader("選擇檔案 (.xls / .xlsx / .csv)", type=["xls", "xlsx", "csv"])
         
         if prsn_file is not None:
             try:
-                uploaded_prsn_df = pd.read_excel(prsn_file)
-                if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
-                    nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士'])].copy()
-                    st.info(f"解析到檔案中有 **{len(nurses_in_file)}** 位護理人員。")
-                    st.dataframe(nurses_in_file[['姓名', '執業類別', '執業起日']], use_container_width=True)
-                    
-                    if st.button(f"🚀 將清冊資料增量更新至 [{target_region}區 - {target_clinic}]"):
-                        existing_names = staff_df[(staff_df['院所'] == target_clinic)]['姓名'].tolist() if '姓名' in staff_df.columns else []
-                        added_count = 0
-                        new_rows = []
-                        for _, row in nurses_in_file.iterrows():
-                            if row['姓名'] not in existing_names:
-                                new_rows.append({
-                                    "區域": target_region, "院所": target_clinic, "姓名": row['姓名'],
-                                    "執業類別": row['執業類別'], "身份": "舊有員工", "符合資格": "🔴 不符合",
-                                    "符合原因": "無", "狀態": "在職"
-                                })
-                                added_count += 1
+                if prsn_file.name.endswith('.csv'):
+                    imported_csv = pd.read_csv(prsn_file)
+                    save_data(imported_csv)
+                    st.success("✅ 已成功還原並覆蓋最新完整資料庫！")
+                    st.rerun()
+                else:
+                    uploaded_prsn_df = pd.read_excel(prsn_file)
+                    if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
+                        nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士'])].copy()
+                        st.info(f"解析到檔案中有 **{len(nurses_in_file)}** 位護理人員。")
+                        st.dataframe(nurses_in_file[['姓名', '執業類別', '執業起日']], use_container_width=True)
                         
-                        if new_rows:
-                            merged_df = pd.concat([staff_df, pd.DataFrame([new_rows])], ignore_index=True)
-                            save_data(merged_df)
-                            st.balloons()
-                            st.success(f"✅ 更新成功！新增了 {added_count} 位新護理人員！")
-                        else:
-                            st.warning("⚠️ 檔案中的護理人員皆已存在。")
-                        st.rerun()
+                        if st.button(f"🚀 將清冊資料增量更新至 [{target_region}區 - {target_clinic}]"):
+                            existing_names = staff_df[(staff_df['院所'] == target_clinic)]['姓名'].tolist() if '姓名' in staff_df.columns else []
+                            added_count = 0
+                            new_rows = []
+                            for _, row in nurses_in_file.iterrows():
+                                if row['姓名'] not in existing_names:
+                                    new_rows.append({
+                                        "區域": target_region, "院所": target_clinic, "姓名": row['姓名'],
+                                        "執業類別": row['執業類別'], "身份": "舊有員工", "符合資格": "🔴 不符合",
+                                        "符合原因": "無", "狀態": "在職"
+                                    })
+                                    added_count += 1
+                            
+                            if new_rows:
+                                merged_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
+                                save_data(merged_df)
+                                st.balloons()
+                                st.success(f"✅ 更新成功！新增了 {added_count} 位新護理人員！")
+                            else:
+                                st.warning("⚠️ 檔案中的護理人員皆已存在。")
+                            st.rerun()
             except Exception as e:
                 st.error(f"檔案讀取失敗：{e}")
 
     st.markdown("---")
 
-    # 2. 全院卡控總表
+    # ---------------------------------------------------------------
+    # 2. 全院卡控總表 (即時連動計算)
+    # ---------------------------------------------------------------
     st.write("🔍 **總表區域篩選**")
     filter_region = st.selectbox("選擇要檢視的區域（或顯示全部）：", ["全部區域"] + list(CLINIC_REGIONS.keys()))
 
@@ -275,7 +294,7 @@ else:
     
     for c in display_clinics:
         c_region = CLINIC_TO_REGION.get(c, "")
-        c_df_next_month = df[(df['院所'] == c) & (df['狀態'] != '離職')] if '院所' in df.columns else pd.DataFrame()
+        c_df_next_month = staff_df[(staff_df['院所'] == c) & (staff_df['狀態'] != '離職')] if '院所' in staff_df.columns else pd.DataFrame()
         tot = len(c_df_next_month)
         comp = len(c_df_next_month[c_df_next_month['符合資格'].str.contains('符合', na=False)]) if tot > 0 else 0
         req = math.ceil(tot / 2) if tot > 0 else 0
@@ -293,9 +312,12 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.table(summary_df)
 
-    # 3. HR 檢視與調整各院所人員明細 (包含 🟢/🔴 燈號選單)
+    # ---------------------------------------------------------------
+    # 3. HR 深入檢視與調整各院所人員明細 (雙向完美同步)
+    # ---------------------------------------------------------------
     st.markdown("---")
     st.subheader("📋 HR 深入檢視與調整各院所人員明細")
+    st.write("請使用下方連動選單選擇欲查看的院所：")
     
     col_hr_detail_r, col_hr_detail_c = st.columns(2)
     hr_view_region = col_hr_detail_r.selectbox("1. 選擇大項【區域】：", list(CLINIC_REGIONS.keys()), key="hr_view_reg")
@@ -303,7 +325,7 @@ else:
 
     st.markdown(f"#### 📍【{hr_view_region}區】{hr_view_clinic} - 下月預估現況")
 
-    hr_clinic_df_next_month = df[(df['院所'] == hr_view_clinic) & (df['狀態'] != '離職')]
+    hr_clinic_df_next_month = staff_df[(staff_df['院所'] == hr_view_clinic) & (staff_df['狀態'] != '離職')]
     hr_tot = len(hr_clinic_df_next_month)
     hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
     hr_req = math.ceil(hr_tot / 2) if hr_tot > 0 else 0
@@ -341,9 +363,10 @@ else:
         )
         
         if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
-            staff_df.update(hr_edited_df)
+            # 精準對齊替換全域資料
+            staff_df.loc[staff_df['院所'] == hr_view_clinic, :] = hr_edited_df.values
             save_data(staff_df)
-            st.success(f"✅ 已成功更新 [{hr_view_clinic}] 的人員資料！")
+            st.success(f"✅ 已成功更新 [{hr_view_clinic}] 的人員資料並同步至全院總表！")
             st.rerun()
             
         with st.expander(f"➕ 手動新增名冊外人員至 [{hr_view_clinic}]"):
@@ -366,7 +389,9 @@ else:
     else:
         st.info(f"💡 目前【{hr_view_clinic}】尚未建立人員名冊，可利用頁面上方方塊上傳該院所的醫事人員執業清冊。")
 
+    # ---------------------------------------------------------------
     # 4. LINE 推播區
+    # ---------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔔 LINE 官方帳號 - 私訊催辦推播")
     
