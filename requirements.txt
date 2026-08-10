@@ -3,3 +3,4 @@ pandas
 requests
 st-gsheets-connection
 openpyxl
+xlrd
