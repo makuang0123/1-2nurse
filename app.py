@@ -16,7 +16,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
     try:
-        # 讀取名為 "Staff" 的工作表，若讀不到則回傳預設資料
         df = conn.read(worksheet="Staff", ttl=0)
         return df
     except Exception:
@@ -97,7 +96,7 @@ def send_line_message(channel_access_token, user_id, message):
 
 # 計算合規性
 df = staff_df.copy()
-if not df.empty:
+if not df.empty and '狀態' in df.columns:
     df['符合資格'] = df.apply(check_compliance, axis=1)
 
 # -------------------------------------------------------------------
@@ -109,9 +108,9 @@ if user["role"] == "會計":
     selected_clinic = user["clinic"]
     st.subheader(f"📍 {selected_clinic} - 人員資料維護與管控")
 
-    clinic_df = df[(df['院所'] == selected_clinic) & (df['狀態'] == '在職')]
+    clinic_df = df[(df['院所'] == selected_clinic) & (df['狀態'] == '在職')] if '院所' in df.columns else pd.DataFrame()
     total_nurses = len(clinic_df)
-    compliant_nurses = clinic_df['符合資格'].sum() if total_nurses > 0 else 0
+    compliant_nurses = clinic_df['符合資格'].sum() if total_nurses > 0 and '符合資格' in clinic_df.columns else 0
     target_needed = math.ceil(total_nurses / 2) if total_nurses > 0 else 0
     is_passed = compliant_nurses >= target_needed and total_nurses > 0
 
@@ -150,11 +149,12 @@ if user["role"] == "會計":
 
     # 顯示目前名單
     st.write("📋 **目前執登人員名單**")
-    st.dataframe(clinic_df[["姓名", "身份", "原級距", "現行級距", "投保金額", "符合資格"]], use_container_width=True)
+    if not clinic_df.empty:
+        st.dataframe(clinic_df[["姓名", "身份", "原級距", "現行級距", "投保金額", "符合資格"]], use_container_width=True)
 
     # 辦理離職
     with st.expander("🗑️ 辦理護理人員離職"):
-        active_names = clinic_df["姓名"].tolist()
+        active_names = clinic_df["姓名"].tolist() if not clinic_df.empty else []
         if active_names:
             remove_name = st.selectbox("選擇離職人員", active_names)
             if st.button("確認辦理離職並更新"):
@@ -167,46 +167,63 @@ if user["role"] == "會計":
 else:
     st.subheader("📊 全院所護理人員執登卡控 - HR總表")
     
-    # 🌟 新功能：批次匯入 Excel 資料
-    with st.expander("📁 批次匯入/覆蓋整份 Excel 護理人員資料", expanded=False):
-        st.write("請選擇含有欄位：`院所`, `姓名`, `身份`, `原級距`, `現行級距`, `投保金額`, `狀態` 的 Excel 檔案。")
-        uploaded_file = st.file_uploader("上傳 Excel 檔案 (.xlsx)", type=["xlsx", "xls"])
+    # 🌟 核心功能：上傳健保署/衛福部「醫事人員執業清冊」自動擷取護理師母數
+    with st.expander("📄 匯入健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」", expanded=True):
+        st.write("上傳各院所從健保系統下載的名冊檔（系統會自動篩選 **`護理師`** 與 **`護士`** 作為執登母數）。")
         
-        if uploaded_file is not None:
+        col_c, col_f = st.columns([1, 2])
+        target_clinic = col_c.selectbox("選擇此檔案所屬的院所：", ["台北院所", "台中院所", "高雄院所"])
+        prsn_file = col_f.file_uploader("選擇執業清冊檔案 (.xls / .xlsx)", type=["xls", "xlsx"])
+        
+        if prsn_file is not None:
             try:
-                excel_df = pd.read_excel(uploaded_file)
-                required_cols = ['院所', '姓名', '身份', '原級距', '現行級距', '投保金額', '狀態']
+                # 讀取 Excel 檔案
+                uploaded_prsn_df = pd.read_excel(prsn_file)
                 
-                if all(col in excel_df.columns for col in required_cols):
-                    st.write("預覽上傳的 Excel 資料內容：")
-                    st.dataframe(excel_df[required_cols].head(), use_container_width=True)
+                # 檢查是否有健保清冊標準欄位「執業類別」
+                if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
+                    # 自動篩選 護理師 與 護士
+                    nurse_only_df = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士'])].copy()
                     
-                    import_mode = st.radio("請選擇匯入模式：", ["覆蓋原有全部資料", "累加到既有資料後面"])
+                    st.success(f"解析成功！從檔案中共抓取 **{len(nurse_only_df)}** 位護理人員（已自動排除醫師/藥師）。")
+                    st.dataframe(nurse_only_df[['姓名', '執業類別', '執業起日']], use_container_width=True)
                     
-                    if st.button("🚀 確認將 Excel 資料匯入系統"):
-                        if import_mode == "覆蓋原有全部資料":
-                            final_df = excel_df[required_cols]
-                        else:
-                            final_df = pd.concat([staff_df, excel_df[required_cols]], ignore_index=True)
+                    if st.button(f"🚀 將這 {len(nurse_only_df)} 位護理人員寫入 [{target_clinic}] 執登名單"):
+                        # 將原本該院所舊資料清除，換成新匯入的母數名單
+                        other_clinics_df = staff_df[staff_df['院所'] != target_clinic] if '院所' in staff_df.columns else pd.DataFrame()
                         
-                        conn.update(worksheet="Staff", data=final_df)
-                        st.success("✅ 資料已成功批次匯入並寫入雲端資料庫！")
+                        new_records = []
+                        for idx, row in nurse_only_df.iterrows():
+                            new_records.append({
+                                "院所": target_clinic,
+                                "姓名": row['姓名'],
+                                "身份": "舊有員工",  # 預設身份
+                                "原級距": 1,
+                                "現行級距": 1,
+                                "投保金額": 27470,
+                                "狀態": "在職"
+                            })
+                        
+                        merged_df = pd.concat([other_clinics_df, pd.DataFrame(new_records)], ignore_index=True)
+                        conn.update(worksheet="Staff", data=merged_df)
+                        st.balloons()
+                        st.success(f"✅ 已成功更新 [{target_clinic}] 的執登母數！會計可登入填寫詳細投保金額。")
                         st.rerun()
                 else:
-                    st.error(f"❌ Excel 欄位標題不符，請確認是否包含：{', '.join(required_cols)}")
+                    st.error("❌ 檔案欄位不符合健保清冊格式（未包含「執業類別」與「姓名」欄位）。")
             except Exception as e:
-                st.error(f"檔案讀取失敗：{e}")
+                st.error(f"檔案解析失敗：{e}")
 
     st.markdown("---")
 
     # 總表顯示
-    clinics = list(set(df["院所"].tolist())) if not df.empty else []
+    clinics = list(set(df["院所"].tolist())) if not df.empty and '院所' in df.columns else ["台北院所", "台中院所"]
     summary_list = []
     
     for c in clinics:
-        c_df = df[(df['院所'] == c) & (df['狀態'] == '在職')]
+        c_df = df[(df['院所'] == c) & (df['狀態'] == '在職')] if '院所' in df.columns else pd.DataFrame()
         tot = len(c_df)
-        comp = c_df['符合資格'].sum() if tot > 0 else 0
+        comp = c_df['符合資格'].sum() if tot > 0 and '符合資格' in c_df.columns else 0
         req = math.ceil(tot / 2) if tot > 0 else 0
         status = "🟢 達標" if (comp >= req and tot > 0) else "🔴 未達標"
         summary_list.append({
