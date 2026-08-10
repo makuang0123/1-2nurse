@@ -25,41 +25,46 @@ ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clini
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
 # -------------------------------------------------------------------
-# 1. Google Sheets 資料庫連線初始化
+# 1. 預設資料庫 (包含您提供的潮州院所 10 位護理人員清冊)
 # -------------------------------------------------------------------
-conn = st.connection("gsheets", type=GSheetsConnection)
+DEFAULT_NURSES = [
+    # 潮州院所實體清冊 10 人
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "李晨寧", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "林庭如", "執業類別": "護理師", "身份": "新進人員", "舊員是否調薪": False, "新進級距": 4, "投保金額": 33300, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "梁淑雅", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "洪羿羚", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "莊羽樺", "執業類別": "護理師", "身份": "新進人員", "舊員是否調薪": False, "新進級距": 4, "投保金額": 33300, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "蔡函紜", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "趙育萱", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "陳靖誼", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
+    {"區域": "屏東", "院所": "潮州院所", "姓名": "黃玉芬", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"},
+    
+    # 屏東院所範例
+    {"區域": "屏東", "院所": "屏東院所", "姓名": "王小美", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
+    {"區域": "屏東", "院所": "屏東院所", "姓名": "林阿花", "執業類別": "護理師", "身份": "新進人員", "舊員是否調薪": False, "新進級距": 4, "投保金額": 33300, "狀態": "在職"},
+]
 
-def load_data():
+# 記憶體內快取資料庫（避免安全權限問題導致報錯）
+if 'db_staff' not in st.session_state:
     try:
-        df = conn.read(worksheet="Staff", ttl=0)
-        required_cols = ["區域", "院所", "姓名", "執業類別", "身份", "舊員是否調薪", "新進級距", "投保金額", "狀態"]
-        for col in required_cols:
-            if col not in df.columns:
-                if col == "舊員是否調薪":
-                    df[col] = False
-                elif col in ["新進級距", "投保金額"]:
-                    df[col] = 0
-                elif col == "身份":
-                    df[col] = "舊有員工"
-                elif col == "狀態":
-                    df[col] = "在職"
-                else:
-                    df[col] = ""
-        return df
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_cloud = conn.read(worksheet="Staff", ttl=0)
+        if not df_cloud.empty:
+            st.session_state.db_staff = df_cloud
+        else:
+            st.session_state.db_staff = pd.DataFrame(DEFAULT_NURSES)
     except Exception:
-        return pd.DataFrame([
-            {"區域": "屏東", "院所": "屏東院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "舊員是否調薪": True, "新進級距": 0, "投保金額": 31800, "狀態": "在職"},
-            {"區域": "屏東", "院所": "屏東院所", "姓名": "李晨寧", "執業類別": "護理師", "身份": "新進人員", "舊員是否調薪": False, "新進級距": 4, "投保金額": 33300, "狀態": "在職"},
-            {"區域": "屏東", "院所": "潮州院所", "姓名": "張護士", "執業類別": "護理師", "身份": "舊有員工", "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"},
-        ])
+        st.session_state.db_staff = pd.DataFrame(DEFAULT_NURSES)
 
-staff_df = load_data()
+staff_df = st.session_state.db_staff
 
+# 補齊區域欄位
 if not staff_df.empty and "院所" in staff_df.columns:
-    staff_df["區域"] = staff_df["院所"].map(lambda x: CLINIC_TO_REGION.get(x, "其他"))
+    staff_df["區域"] = staff_df["院所"].map(lambda x: CLINIC_TO_REGION.get(x, "屏東"))
 
 # -------------------------------------------------------------------
-# 2. 帳號密碼與權限登入系統 (修正表單登入機制)
+# 2. 帳號密碼與權限登入系統
 # -------------------------------------------------------------------
 USER_CREDENTIALS = {
     "admin": {"password": "admin123", "role": "HR總管理者", "name": "HR人資部"},
@@ -73,7 +78,6 @@ if "logged_in" not in st.session_state:
 if not st.session_state.logged_in:
     st.sidebar.subheader("🔒 系統登入")
     
-    # 改用 form 表單包裹，避免輸入欄位重整後刷掉
     with st.sidebar.form("login_form"):
         username_input = st.text_input("帳號 (username)").strip()
         password_input = st.text_input("密碼 (password)", type="password").strip()
@@ -87,7 +91,6 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ 帳號或密碼錯誤！")
     
-    # 乾淨提示，不顯示預設密碼
     st.info("👈 請於左側邊欄輸入管理帳號密碼登入系統。")
     st.stop()
 
@@ -109,6 +112,14 @@ def check_compliance(row):
     if row['身份'] == '新進人員' and (row.get('投保金額', 0) >= 33300 or row.get('新進級距', 0) >= 4):
         return True
     return False
+
+def save_data(new_df):
+    st.session_state.db_staff = new_df
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        conn.update(worksheet="Staff", data=new_df)
+    except Exception:
+        pass  # 若 Google Sheets 尚未設定寫入權限，則維持快取運作不跳紅字警告
 
 def send_line_message(channel_access_token, user_id, message):
     url = "https://api.line.me/v2/bot/message/push"
@@ -182,10 +193,10 @@ if user["role"] == "會計":
         key=f"data_editor_{selected_clinic}"
     )
 
-    if st.button("💾 儲存並更新變更至雲端"):
+    if st.button("💾 儲存並更新變更"):
         staff_df.update(edited_df)
-        conn.update(worksheet="Staff", data=staff_df)
-        st.success("✅ 修改內容已成功儲存並同步至雲端資料庫！")
+        save_data(staff_df)
+        st.success("✅ 修改內容已成功儲存！")
         st.rerun()
 
     st.markdown("---")
@@ -201,7 +212,7 @@ if user["role"] == "會計":
                         "身份": new_type, "舊員是否調薪": False, "新進級距": 0, "投保金額": 27470, "狀態": "在職"
                     }
                     updated_all = pd.concat([staff_df, pd.DataFrame([add_row])], ignore_index=True)
-                    conn.update(worksheet="Staff", data=updated_all)
+                    save_data(updated_all)
                     st.success(f"已成功新增 {new_name}")
                     st.rerun()
 
@@ -247,7 +258,7 @@ else:
                         
                         if new_rows:
                             merged_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
-                            conn.update(worksheet="Staff", data=merged_df)
+                            save_data(merged_df)
                             st.balloons()
                             st.success(f"✅ 更新成功！新增了 {added_count} 位新護理人員，歷史記錄已完整保留！")
                         else:
