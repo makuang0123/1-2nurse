@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 # 頁面標題與配置
 st.set_page_config(page_title="護理人員執登與調薪卡控系統", layout="wide")
 
-st.title("🩺 院所護理人員投保級距與執登管控系統 (正式版)")
+st.title("🩺 院所護理人員投保級距與執登管控系統")
 
 # -------------------------------------------------------------------
 # 1. Google Sheets 資料庫連線初始化
@@ -20,7 +20,7 @@ def load_data():
         df = conn.read(worksheet="Staff", ttl=0)
         return df
     except Exception:
-        # 預設資料結構
+        # 預設範例資料結構
         return pd.DataFrame([
             {"院所": "台北院所", "姓名": "王小美", "身份": "舊有員工", "原級距": 2, "現行級距": 3, "投保金額": 31800, "狀態": "在職"},
             {"院所": "台北院所", "姓名": "林阿花", "身份": "新進人員", "原級距": 0, "現行級距": 4, "投保金額": 33300, "狀態": "在職"},
@@ -33,7 +33,7 @@ staff_df = load_data()
 # -------------------------------------------------------------------
 # 2. 帳號密碼與權限登入系統
 # -------------------------------------------------------------------
-# 預設帳號密碼庫 (實際生產環境可儲存於 secrets)
+# 帳號密碼對照表
 USER_CREDENTIALS = {
     "taipei": {"password": "tp123", "role": "會計", "clinic": "台北院所", "name": "台北會計"},
     "taichung": {"password": "tc123", "role": "會計", "clinic": "台中院所", "name": "台中會計"},
@@ -69,23 +69,41 @@ if st.sidebar.button("🚪 登出系統"):
     st.rerun()
 
 # -------------------------------------------------------------------
-# 3. 業務邏輯與 LINE 推播函數
+# 3. 業務邏輯與 LINE Messaging API 發送函數 (一對一私訊)
 # -------------------------------------------------------------------
 def check_compliance(row):
     if row['狀態'] == '離職':
         return False
+    # 條件 1：舊有員工調薪 (級距往上)
     if row['身份'] == '舊有員工' and row['現行級距'] > row['原級距']:
         return True
+    # 條件 2：新進人員投保金額達第四級 (>= 33,300)
     if row['身份'] == '新進人員' and row['投保金額'] >= 33300:
         return True
     return False
 
-def send_line_notify(token, message):
-    url = "https://notify-api.line.me/api/notify"
-    headers = {"Authorization": f"Bearer {token}"}
-    data = {"message": message}
-    response = requests.post(url, headers=headers, data=data)
-    return response.status_code == 200
+def send_line_message(channel_access_token, user_id, message):
+    """使用 LINE Messaging API 推播私訊給特定會計"""
+    url = "https://api.line.me/v2/bot/message/push"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {channel_access_token}"
+    }
+    payload = {
+        "to": user_id,
+        "messages": [
+            {
+                "type": "text",
+                "text": message
+            }
+        ]
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"連線失敗：{e}")
+        return False
 
 # 計算合規性
 df = staff_df.copy()
@@ -95,7 +113,7 @@ df['符合資格'] = df.apply(check_compliance, axis=1)
 # 4. 畫面展示：會計輸入端 vs HR 總表
 # -------------------------------------------------------------------
 
-# --- 會計模式 ---
+# --- 模式 A：院所會計輸入端 ---
 if user["role"] == "會計":
     selected_clinic = user["clinic"]
     st.subheader(f"📍 {selected_clinic} - 人員資料維護與管控")
@@ -127,7 +145,7 @@ if user["role"] == "會計":
             curr_level = st.number_input("現行投保級距", min_value=1, max_value=20, value=1)
             salary = st.number_input("投保金額 (NTD)", min_value=0, value=33300, step=100)
             
-            if st.form_submit_button("儲存並更新至 Google Sheets"):
+            if st.form_submit_button("儲存並更新至雲端資料庫"):
                 if name:
                     new_row = {
                         "院所": selected_clinic, "姓名": name, "身份": emp_type,
@@ -135,7 +153,6 @@ if user["role"] == "會計":
                         "投保金額": salary, "狀態": "在職"
                     }
                     updated_df = pd.concat([staff_df, pd.DataFrame([new_row])], ignore_index=True)
-                    # 同步回寫 Google Sheets
                     conn.update(worksheet="Staff", data=updated_df)
                     st.success(f"已成功新增 {name} 並同步寫入雲端資料庫！")
                     st.rerun()
@@ -155,7 +172,7 @@ if user["role"] == "會計":
                 st.warning(f"已將 {remove_name} 標記為離職並同步至雲端。")
                 st.rerun()
 
-# --- HR 總管理者模式 ---
+# --- 模式 B：HR 總管理者模式 ---
 else:
     st.subheader("📊 全院所護理人員執登卡控 - HR總表")
     
@@ -180,7 +197,7 @@ else:
     st.table(summary_df)
 
     st.markdown("---")
-    st.subheader("🔔 LINE Notify 自動催辦推播")
+    st.subheader("🔔 LINE 官方帳號 - 私訊催辦推播")
     
     unpassed = summary_df[summary_df["管控狀態"] == "🔴 未達標"]["院所名稱"].tolist()
     
@@ -188,21 +205,22 @@ else:
         st.warning(f"目前以下院所合規人數未達 1/2 標準：**{', '.join(unpassed)}**")
         selected_notify_clinic = st.selectbox("選擇要發送 LINE 提醒的院所：", unpassed)
         
-        # 讀取 Secrets 中的 LINE Token (若無設定可手動輸入測試)
-        line_token = st.text_input("LINE Notify Token (發送權限金鑰)", type="password", help="可在 LINE Notify 官網免費申請")
+        # 金鑰設定區
+        line_token = st.text_input("LINE Channel Access Token (機器人金鑰)", type="password", help="於 LINE Developers 後台取得")
+        accountant_line_id = st.text_input("該院所會計的個人 LINE User ID (以 U 開頭)", help="會計加機器人好友後可於後台查看")
         
-        msg_template = f"\n⚠️【HR催辦通知】\n{selected_notify_clinic} 負責會計您好：\n貴院本月護理師投保級距合規人數未達執登總人數之 1/2，請儘速進系統調整或補齊投保資料！"
+        msg_template = f"⚠️【HR催辦通知】\n{selected_notify_clinic} 負責會計您好：\n貴院本月護理師投保級距合規人數未達執登總人數之 1/2，請儘速進系統調整或補齊投保資料！"
         st.text_area("推播訊息內容預覽", msg_template, height=120)
         
-        if st.button("🚀 即刻發送 LINE 推播訊息"):
-            if line_token:
-                success = send_line_notify(line_token, msg_template)
+        if st.button("🚀 即刻私訊發送 LINE 提醒"):
+            if line_token and accountant_line_id:
+                success = send_line_message(line_token, accountant_line_id, msg_template)
                 if success:
-                    st.success(f"✅ 已成功將提醒訊息推播至 [{selected_notify_clinic}] 的 LINE！")
+                    st.success(f"✅ 已成功私訊發送給 [{selected_notify_clinic}] 負責會計！")
                 else:
-                    st.error("❌ 發送失敗，請檢查 LINE Notify Token 是否正確。")
+                    st.error("❌ 發送失敗，請檢查金鑰 (Token) 與會計的 LINE User ID 是否正確。")
             else:
-                st.error("請輸入 LINE Notify Token 後再嘗試發送。")
+                st.error("請輸入 LINE Token 與會計的 LINE User ID 後再發送。")
     else:
         st.balloons()
         st.success("🎉 所有院所本月皆已符合標準！無需發送提醒。")
