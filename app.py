@@ -13,12 +13,12 @@ st.title("🩺 醫療網護理人員投保級距與執登管控系統")
 # 區域與院所兩階層字典對照表
 # -------------------------------------------------------------------
 CLINIC_REGIONS = {
-    "屏東": ["屏東院", "潮州院", "東港院"],
-    "高雄": ["東霖院", "瑞隆院", "五甲院", "亞灣院", "光華院", "鳳山院", "陽明院", "建功院", "博愛院", "明華院", "意凡院", "佑昌院", "藍田院", "橋頭院"],
-    "台南": ["崇學院", "成功院", "民權院", "百合院", "開元院", "崇德院"],
-    "彰化": ["彰化院"],
-    "台北": ["信義院", "迪化院"],
-    "台東": ["台東院"]
+    "屏東": ["屏東院所", "潮州院所", "東港院所"],
+    "高雄": ["東霖院所", "瑞隆院所", "五甲院所", "亞灣院所", "光華院所", "鳳山院所", "陽明院所", "建功院所", "博愛院所", "明華院所", "意凡院所", "佑昌院所", "藍田院所", "橋頭院所"],
+    "台南": ["崇學院所", "成功院所", "民權院所", "百合院所", "開元院所", "崇德院所"],
+    "彰化": ["彰化院所"],
+    "台北": ["信義院所", "迪化院所"],
+    "台東": ["台東院所"]
 }
 
 ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clinics]
@@ -76,7 +76,6 @@ for col in required_cols:
             staff_df[col] = ""
 
 staff_df["本月離職"] = staff_df["本月離職"].fillna(False).astype(bool)
-# 自動根據符合原因重新嚴格計算符合資格
 staff_df["符合資格"] = staff_df["符合原因"].map(get_compliance_status)
 
 if not staff_df.empty and "院所" in staff_df.columns:
@@ -170,11 +169,9 @@ if user["role"] == "會計":
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
 
-    # 嚴格精準過濾「本月離職」者
     clinic_df_next_month = staff_df[(staff_df['院所'] == selected_clinic) & (staff_df['本月離職'] == False)]
     
     total_nurses_next_month = len(clinic_df_next_month)
-    # 精準配對 '🟢 符合'
     compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'] == '🟢 符合'])
     target_needed = math.ceil(total_nurses_next_month / 2) if total_nurses_next_month > 0 else 0
     is_passed = compliant_nurses_next_month >= target_needed and total_nurses_next_month > 0
@@ -190,7 +187,7 @@ if user["role"] == "會計":
         col4.error("🔴 下個月預估審核：未達標！")
 
     st.markdown("---")
-    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框：**")
+    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框（或點下方垃圾桶直接移除）：**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -199,8 +196,8 @@ if user["role"] == "會計":
         column_config={
             "區域": st.column_config.TextColumn("區域", disabled=True),
             "院所": st.column_config.TextColumn("院所", disabled=True),
-            "姓名": st.column_config.TextColumn("姓名", disabled=True),
-            "執業類別": st.column_config.TextColumn("類別", disabled=True),
+            "姓名": st.column_config.TextColumn("姓名"),
+            "執業類別": st.column_config.TextColumn("類別"),
             "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
             "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True),
             "符合資格": st.column_config.TextColumn("符合資格 (自動判定)", disabled=True),
@@ -208,17 +205,35 @@ if user["role"] == "會計":
         },
         use_container_width=True,
         hide_index=True,
+        num_rows="dynamic",  # 🌟 啟動表格動態新增與刪除功能
         key=f"data_editor_{selected_clinic}"
     )
 
-    if st.button("💾 儲存並更新變更"):
+    col_btn1, col_btn2 = st.columns([1, 4])
+    if col_btn1.button("💾 儲存並更新變更"):
+        # 替換目前院所資料並儲存
+        other_clinics_df = staff_df[staff_df['院所'] != selected_clinic]
         edited_df["符合資格"] = edited_df["符合原因"].map(get_compliance_status)
-        staff_df.update(edited_df)
-        save_data(staff_df)
-        st.success("✅ 修改內容已成功儲存並重新計算！")
+        edited_df["區域"] = selected_region
+        edited_df["院所"] = selected_clinic
+        new_staff_df = pd.concat([other_clinics_df, edited_df], ignore_index=True)
+        save_data(new_staff_df)
+        st.success("✅ 修改內容已成功儲存！")
         st.rerun()
 
+    # 🌟 專屬離職人員批量刪除/移除工具
     st.markdown("---")
+    with st.expander("🗑️ 批量移除/刪除已離職人員名單"):
+        current_names = editable_df["姓名"].tolist() if not editable_df.empty else []
+        if current_names:
+            remove_names = st.multiselect("選擇要從系統永久移除的人員：", current_names)
+            if st.button("❌ 確認移除選取的人員"):
+                if remove_names:
+                    new_staff_df = staff_df[~((staff_df['院所'] == selected_clinic) & (staff_df['姓名'].isin(remove_names)))]
+                    save_data(new_staff_df)
+                    st.success(f"已成功移除 {', '.join(remove_names)}")
+                    st.rerun()
+
     with st.expander("➕ 手動新增名冊外人員"):
         with st.form("add_single_nurse"):
             new_name = st.text_input("姓名")
@@ -237,7 +252,7 @@ if user["role"] == "會計":
                     st.rerun()
 
 # ===================================================================
-# --- 模式 B：HR 總管理者端 (全權限檢視、匯入與編修) ---
+# --- 模式 B：HR 總管理者端 (包含動態刪除功能) ---
 # ===================================================================
 else:
     st.subheader("📊 全院所護理人員下月執登卡控 - HR總表")
@@ -301,7 +316,6 @@ else:
         c_region = CLINIC_TO_REGION.get(c, "")
         c_df_next_month = staff_df[(staff_df['院所'] == c) & (staff_df['本月離職'] == False)] if '院所' in staff_df.columns else pd.DataFrame()
         tot = len(c_df_next_month)
-        # 精準配對 '🟢 符合'
         comp = len(c_df_next_month[c_df_next_month['符合資格'] == '🟢 符合']) if tot > 0 else 0
         req = math.ceil(tot / 2) if tot > 0 else 0
         status = "🟢 達標" if (comp >= req and tot > 0) else ("⚪ 尚未建立名冊" if tot == 0 else "🔴 未達標")
@@ -318,7 +332,7 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.table(summary_df)
 
-    # 3. HR 深入檢視與調整各院所人員明細 (雙向完美連動)
+    # 3. HR 深入檢視與調整各院所人員明細 (支援刪除功能)
     st.markdown("---")
     st.subheader("📋 HR 深入檢視與調整各院所人員明細")
     st.write("請使用下方連動選單選擇欲查看的院所：")
@@ -331,7 +345,6 @@ else:
 
     hr_clinic_df_next_month = staff_df[(staff_df['院所'] == hr_view_clinic) & (staff_df['本月離職'] == False)]
     hr_tot = len(hr_clinic_df_next_month)
-    # 精準配對 '🟢 符合'
     hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'] == '🟢 符合'])
     hr_req = math.ceil(hr_tot / 2) if hr_tot > 0 else 0
     hr_passed = hr_comp >= hr_req and hr_tot > 0
@@ -349,7 +362,7 @@ else:
     hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy()
     
     if not hr_editable_df.empty:
-        st.write("✏️ **人資同仁可直接在下方表格修改資料（修改後點擊儲存）：**")
+        st.write("✏️ **修改資料後點擊儲存（亦可在表格內直接刪除整行或利用下方按鈕批量移除）：**")
         hr_edited_df = st.data_editor(
             hr_editable_df,
             column_config={
@@ -364,16 +377,32 @@ else:
             },
             use_container_width=True,
             hide_index=True,
+            num_rows="dynamic",  # 🌟 HR 端亦啟動表格動態列新增與刪除
             key=f"hr_data_editor_{hr_view_clinic}"
         )
         
         if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
+            other_clinics_df = staff_df[staff_df['院所'] != hr_view_clinic]
             hr_edited_df["符合資格"] = hr_edited_df["符合原因"].map(get_compliance_status)
-            staff_df.update(hr_edited_df)
-            save_data(staff_df)
+            hr_edited_df["區域"] = hr_view_region
+            hr_edited_df["院所"] = hr_view_clinic
+            new_staff_df = pd.concat([other_clinics_df, hr_edited_df], ignore_index=True)
+            save_data(new_staff_df)
             st.success(f"✅ 已成功更新 [{hr_view_clinic}] 的人員資料並同步至全院總表！")
             st.rerun()
-            
+
+        # 🌟 HR 專屬離職人員批量刪除/移除工具
+        with st.expander(f"🗑️ 批量移除/刪除 [{hr_view_clinic}] 已離職人員名單"):
+            hr_current_names = hr_editable_df["姓名"].tolist() if not hr_editable_df.empty else []
+            if hr_current_names:
+                hr_remove_names = st.multiselect("選擇要從系統永久移除的人員：", hr_current_names, key="hr_multiselect_del")
+                if st.button("❌ 確認移除選取的人員", key="hr_btn_del"):
+                    if hr_remove_names:
+                        new_staff_df = staff_df[~((staff_df['院所'] == hr_view_clinic) & (staff_df['姓名'].isin(hr_remove_names)))]
+                        save_data(new_staff_df)
+                        st.success(f"已成功移除 {', '.join(hr_remove_names)}")
+                        st.rerun()
+
         with st.expander(f"➕ 手動新增名冊外人員至 [{hr_view_clinic}]"):
             with st.form("hr_add_single_nurse"):
                 hr_new_name = st.text_input("姓名")
