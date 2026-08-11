@@ -42,7 +42,7 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (包含潮州院 10 位同仁範例)
+# 1. 預設資料庫
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
@@ -98,43 +98,41 @@ if not staff_df.empty and "院所" in staff_df.columns:
     staff_df["區域"] = staff_df["院所"].map(lambda x: CLINIC_TO_REGION.get(x, "屏東"))
 
 # -------------------------------------------------------------------
-# 2. 帳號密碼與權限登入系統 (您可在此直接新增/修改帳號密碼)
+# 2. 帳號密碼與權限地圖 (定義一人管單院/多院)
 # -------------------------------------------------------------------
 USER_CREDENTIALS = {
-    # --- HR 總管理者帳號 ---
-    "admin": {"password": "admin123", "role": "HR總管理者", "clinic": "屏東院", "name": "HR人資部"},
+    "admin": {"password": "admin123", "role": "HR總管理者", "clinics": ALL_CLINICS, "name": "HR人資部"},
     
-    # --- 27 家院所會計專屬帳號 ---
-    "KYW-MK": {"password": "KSY00298", "role": "會計", "clinic": "亞灣院", "name": "吳淑婷"},
-    "NCM-MK": {"password": "NCK00035", "role": "會計", "clinic": "民權院", "name": "李依婷"},
-    "NCS-MK": {"password": "NCK00035", "role": "會計", "clinic": "崇學院", "name": "李依婷"},
-    "KFS-MK": {"password": "KRL00162", "role": "會計", "clinic": "鳳山院", "name": "李宛純"},
-    "KKH-MK": {"password": "KRL00162", "role": "會計", "clinic": "光華院", "name": "李宛純"},
-    "TDH-MK": {"password": "KQT01345", "role": "會計", "clinic": "迪化院", "name": "周詩涵"},
-    "TXY-MK": {"password": "KQT01345", "role": "會計", "clinic": "信義院", "name": "周詩涵"},
-    "NCD-MK": {"password": "NCM01400", "role": "會計", "clinic": "崇德院", "name": "林君豫"},
-    "NKY-MK": {"password": "NCM01400", "role": "會計", "clinic": "開元院", "name": "林君豫"},
-    "PPT-MK": {"password": "PPT00004", "role": "會計", "clinic": "屏東院", "name": "邱麗梅"},
-    "KRL-MK": {"password": "KRL00371", "role": "會計", "clinic": "瑞隆院", "name": "范育甄"},
-    "KBI-MK": {"password": "KRL00371", "role": "會計", "clinic": "博愛院", "name": "范育甄"},
-    "KYC-MK": {"password": "KYF02146", "role": "會計", "clinic": "佑昌院", "name": "張于婕"},
-    "KQT-MK": {"password": "KYF02146", "role": "會計", "clinic": "橋頭院", "name": "張于婕"},
-    "NCK-MK": {"password": "NBH00223", "role": "會計", "clinic": "成功院", "name": "張惠萍"},
-    "NBH-MK": {"password": "NBH00223", "role": "會計", "clinic": "百合院", "name": "張惠萍"},
-    "ZZH-MK": {"password": "ZZH01735", "role": "會計", "clinic": "彰化院", "name": "莊雅惠"},
-    "KLT-MK": {"password": "KYF00075", "role": "會計", "clinic": "藍田院", "name": "郭玉輝"},
-    "KYF-MK": {"password": "KYF00075", "role": "會計", "clinic": "意凡院", "name": "郭玉輝"},
-    "KDL-MK": {"password": "KDL00024", "role": "會計", "clinic": "東霖院", "name": "曾美雲"},
-    "KWJ-MK": {"password": "KSY00327", "role": "會計", "clinic": "五甲院", "name": "黃湘蓉"},
-    "KYM-MK": {"password": "KSY00327", "role": "會計", "clinic": "陽明院", "name": "黃湘蓉"},
-    "DTT-MK": {"password": "DTT02078", "role": "會計", "clinic": "台東院", "name": "塗婉瑜"},
-    "PDG-MK": {"password": "PHK00041", "role": "會計", "clinic": "東港院", "name": "廖靜敏"},
-    "PHK-MK": {"password": "PHK00041", "role": "會計", "clinic": "潮州院", "name": "廖靜敏"},
-    "KMH-MK": {"password": "KJG0018",  "role": "會計", "clinic": "明華院", "name": "賴秀如"},
-    "KJG-MK": {"password": "KJG0018",  "role": "會計", "clinic": "建功院", "name": "賴秀如"},
+    # 27 家院會計專屬帳號與可看院所
+    "KYW-MK": {"password": "KSY00298", "role": "會計", "clinics": ["亞灣院"], "name": "吳淑婷"},
+    "NCM-MK": {"password": "NCK00035", "role": "會計", "clinics": ["民權院"], "name": "李依婷"},
+    "NCS-MK": {"password": "NCK00035", "role": "會計", "clinics": ["崇學院"], "name": "李依婷"},
+    "KFS-MK": {"password": "KRL00162", "role": "會計", "clinics": ["鳳山院"], "name": "李宛純"},
+    "KKH-MK": {"password": "KRL00162", "role": "會計", "clinics": ["光華院"], "name": "李宛純"},
+    "TDH-MK": {"password": "KQT01345", "role": "會計", "clinics": ["迪化院"], "name": "周詩涵"},
+    "TXY-MK": {"password": "KQT01345", "role": "會計", "clinics": ["信義院"], "name": "周詩涵"},
+    "NCD-MK": {"password": "NCM01400", "role": "會計", "clinics": ["崇德院"], "name": "林君豫"},
+    "NKY-MK": {"password": "NCM01400", "role": "會計", "clinics": ["開元院"], "name": "林君豫"},
+    "PPT-MK": {"password": "PPT00004", "role": "會計", "clinics": ["屏東院"], "name": "邱麗梅"},
+    "KRL-MK": {"password": "KRL00371", "role": "會計", "clinics": ["瑞隆院"], "name": "范育甄"},
+    "KBI-MK": {"password": "KRL00371", "role": "會計", "clinics": ["博愛院"], "name": "范育甄"},
+    "KYC-MK": {"password": "KYF02146", "role": "會計", "clinics": ["佑昌院"], "name": "張于婕"},
+    "KQT-MK": {"password": "KYF02146", "role": "會計", "clinics": ["橋頭院"], "name": "張于婕"},
+    "NCK-MK": {"password": "NBH00223", "role": "會計", "clinics": ["成功院"], "name": "張惠萍"},
+    "NBH-MK": {"password": "NBH00223", "role": "會計", "clinics": ["百合院"], "name": "張惠萍"},
+    "ZZH-MK": {"password": "ZZH01735", "role": "會計", "clinics": ["彰化院"], "name": "莊雅惠"},
+    "KLT-MK": {"password": "KYF00075", "role": "會計", "clinics": ["藍田院"], "name": "郭玉輝"},
+    "KYF-MK": {"password": "KYF00075", "role": "會計", "clinics": ["意凡院"], "name": "郭玉輝"},
+    "KDL-MK": {"password": "KDL00024", "role": "會計", "clinics": ["東霖院"], "name": "曾美雲"},
+    "KWJ-MK": {"password": "KSY00327", "role": "會計", "clinics": ["五甲院"], "name": "黃湘蓉"},
+    "KYM-MK": {"password": "KSY00327", "role": "會計", "clinics": ["陽明院"], "name": "黃湘蓉"},
+    "DTT-MK": {"password": "DTT02078", "role": "會計", "clinics": ["台東院"], "name": "塗婉瑜"},
+    "PDG-MK": {"password": "PHK00041", "role": "會計", "clinics": ["東港院"], "name": "廖靜敏"},
+    "PHK-MK": {"password": "PHK00041", "role": "會計", "clinics": ["潮州院"], "name": "廖靜敏"},
+    "KMH-MK": {"password": "KJG0018",  "role": "會計", "clinics": ["明華院"], "name": "賴秀如"},
+    "KJG-MK": {"password": "KJG0018",  "role": "會計", "clinics": ["建功院"], "name": "賴秀如"},
     
-    # 測試用會計通用帳號
-    "accountant": {"password": "act123", "role": "會計", "clinic": "屏東院", "name": "測試會計"}
+    "accountant": {"password": "act123", "role": "會計", "clinics": ["潮州院"], "name": "測試會計"}
 }
 
 if "logged_in" not in st.session_state:
@@ -161,7 +159,9 @@ if not st.session_state.logged_in:
     st.stop()
 
 user = st.session_state.user_info
-st.sidebar.success(f"👤 歡迎登入：{user['name']} ({user.get('clinic', '')})")
+allowed_clinics = user.get("clinics", [])
+
+st.sidebar.success(f"👤 歡迎登入：{user['name']}\n權限：{', '.join(allowed_clinics)}")
 if st.sidebar.button("🚪 登出系統"):
     st.session_state.logged_in = False
     st.session_state.user_info = None
@@ -190,37 +190,23 @@ def send_line_message(channel_access_token, user_id, message):
         st.error(f"連線失敗：{e}")
         return False
 
-# -------------------------------------------------------------------
-# 4. 畫面展示：會計試算/勾選端 vs HR 總表
-# -------------------------------------------------------------------
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📥 系統資料備份與匯出")
-csv_data = staff_df.to_csv(index=False).encode('utf-8-sig')
-st.sidebar.download_button(
-    label="💾 匯出最新完整資料庫 (.csv)",
-    data=csv_data,
-    file_name="nurse_control_master.csv",
-    mime="text/csv"
-)
-
 # ===================================================================
-# --- 模式 A：院所會計輸入/勾選端 ---
+# --- 模式 A：院所會計端 (僅顯示權限內允許的院) ---
 # ===================================================================
 if user["role"] == "會計":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📍 選擇服務院所")
+    st.sidebar.subheader("📍 服務院所 (已鎖定權限)")
     
-    # 預設定位至該會計負責的院所與區域
-    default_clinic = user.get("clinic", "屏東院")
-    default_region = CLINIC_TO_REGION.get(default_clinic, "屏東")
+    # 根據該會計允許看到的院，反推允許的區域
+    allowed_regions = list(set([CLINIC_TO_REGION.get(c, "屏東") for c in allowed_clinics]))
     
-    reg_idx = list(CLINIC_REGIONS.keys()).index(default_region) if default_region in CLINIC_REGIONS else 0
-    selected_region = st.sidebar.selectbox("1. 請先選擇大項「區域」：", list(CLINIC_REGIONS.keys()), index=reg_idx)
+    selected_region = st.sidebar.selectbox("1. 大項「區域」：", allowed_regions)
     
-    available_clinics = CLINIC_REGIONS[selected_region]
-    cli_idx = available_clinics.index(default_clinic) if default_clinic in available_clinics else 0
-    selected_clinic = st.sidebar.selectbox("2. 再選擇小項「院」：", available_clinics, index=cli_idx)
+    # 該區域內，且屬於該會計權限允許的院
+    region_clinics = CLINIC_REGIONS[selected_region]
+    user_available_clinics = [c for c in region_clinics if c in allowed_clinics]
+    
+    selected_clinic = st.sidebar.selectbox("2. 小項「院」：", user_available_clinics)
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
 
@@ -308,12 +294,21 @@ if user["role"] == "會計":
                     st.rerun()
 
 # ===================================================================
-# --- 模式 B：HR 總管理者端 ---
+# --- 模式 B：HR 總管理者端 (全權限觀看與匯入) ---
 # ===================================================================
 else:
     st.subheader("📊 全院護理人員下月執登卡控 - HR總表")
     
-    # 匯入預審區
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📥 系統資料備份與匯出")
+    csv_data = staff_df.to_csv(index=False).encode('utf-8-sig')
+    st.sidebar.download_button(
+        label="💾 匯出最新完整資料庫 (.csv)",
+        data=csv_data,
+        file_name="nurse_control_master.csv",
+        mime="text/csv"
+    )
+
     with st.expander("📄 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審", expanded=True):
         st.write("上傳包含欄位：`員工編號`、`中文姓名`、`職稱`、`上班地點`、`到職日` 的總表：")
         
