@@ -13,12 +13,12 @@ st.title("🩺 醫療網護理人員投保級距與執登管控系統")
 # 區域與院所兩階層字典對照表
 # -------------------------------------------------------------------
 CLINIC_REGIONS = {
-    "屏東": ["屏東院所", "潮州院所", "東港院所"],
-    "高雄": ["東霖院所", "瑞隆院所", "五甲院所", "亞灣院所", "光華院所", "鳳山院所", "陽明院所", "建功院所", "博愛院所", "明華院所", "意凡院所", "佑昌院所", "藍田院所", "橋頭院所"],
-    "台南": ["崇學院所", "成功院所", "民權院所", "百合院所", "開元院所", "崇德院所"],
-    "彰化": ["彰化院所"],
-    "台北": ["信義院所", "迪化院所"],
-    "台東": ["台東院所"]
+    "屏東": ["屏東院", "潮州院", "東港院"],
+    "高雄": ["東霖院", "瑞隆院", "五甲院", "亞灣院", "光華院", "鳳山院", "陽明院", "建功院", "博愛院", "明華院", "意凡院", "佑昌院", "藍田院", "橋頭院"],
+    "台南": ["崇學院", "成功院", "民權院", "百合院", "開元院", "崇德院"],
+    "彰化": ["彰化院"],
+    "台北": ["信義院", "迪化院"],
+    "台東": ["台東院"]
 }
 
 ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clinics]
@@ -32,7 +32,7 @@ def get_compliance_status(reason):
     return "🔴 不符合"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (包含「本月離職」勾選狀態)
+# 1. 預設資料庫 (包含潮州院所 10 位護理人員範例)
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院所", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False},
@@ -60,10 +60,7 @@ if 'db_staff' not in st.session_state:
 
 staff_df = st.session_state.db_staff
 
-# 舊版相容性轉換
-if "狀態" in staff_df.columns and "本月離職" not in staff_df.columns:
-    staff_df["本月離職"] = staff_df["狀態"].apply(lambda x: True if x == "離職" else False)
-
+# 必要欄位補齊與清洗
 required_cols = ["區域", "院所", "姓名", "執業類別", "身份", "符合原因", "符合資格", "本月離職"]
 for col in required_cols:
     if col not in staff_df.columns:
@@ -79,6 +76,7 @@ for col in required_cols:
             staff_df[col] = ""
 
 staff_df["本月離職"] = staff_df["本月離職"].fillna(False).astype(bool)
+# 自動根據符合原因重新嚴格計算符合資格
 staff_df["符合資格"] = staff_df["符合原因"].map(get_compliance_status)
 
 if not staff_df.empty and "院所" in staff_df.columns:
@@ -172,11 +170,12 @@ if user["role"] == "會計":
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
 
-    # 🌟 精準計算：預先扣除標記為「☑️ 本月離職」者
+    # 嚴格精準過濾「本月離職」者
     clinic_df_next_month = staff_df[(staff_df['院所'] == selected_clinic) & (staff_df['本月離職'] == False)]
     
     total_nurses_next_month = len(clinic_df_next_month)
-    compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
+    # 精準配對 '🟢 符合'
+    compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'] == '🟢 符合'])
     target_needed = math.ceil(total_nurses_next_month / 2) if total_nurses_next_month > 0 else 0
     is_passed = compliant_nurses_next_month >= target_needed and total_nurses_next_month > 0
 
@@ -214,7 +213,7 @@ if user["role"] == "會計":
 
     if st.button("💾 儲存並更新變更"):
         edited_df["符合資格"] = edited_df["符合原因"].map(get_compliance_status)
-        staff_df.loc[staff_df['院所'] == selected_clinic, :] = edited_df.values
+        staff_df.update(edited_df)
         save_data(staff_df)
         st.success("✅ 修改內容已成功儲存並重新計算！")
         st.rerun()
@@ -238,7 +237,7 @@ if user["role"] == "會計":
                     st.rerun()
 
 # ===================================================================
-# --- 模式 B：HR 總管理者端 (包含「本月離職」勾選框) ---
+# --- 模式 B：HR 總管理者端 (全權限檢視、匯入與編修) ---
 # ===================================================================
 else:
     st.subheader("📊 全院所護理人員下月執登卡控 - HR總表")
@@ -302,7 +301,8 @@ else:
         c_region = CLINIC_TO_REGION.get(c, "")
         c_df_next_month = staff_df[(staff_df['院所'] == c) & (staff_df['本月離職'] == False)] if '院所' in staff_df.columns else pd.DataFrame()
         tot = len(c_df_next_month)
-        comp = len(c_df_next_month[c_df_next_month['符合資格'].str.contains('符合', na=False)]) if tot > 0 else 0
+        # 精準配對 '🟢 符合'
+        comp = len(c_df_next_month[c_df_next_month['符合資格'] == '🟢 符合']) if tot > 0 else 0
         req = math.ceil(tot / 2) if tot > 0 else 0
         status = "🟢 達標" if (comp >= req and tot > 0) else ("⚪ 尚未建立名冊" if tot == 0 else "🔴 未達標")
         
@@ -318,7 +318,7 @@ else:
     summary_df = pd.DataFrame(summary_list)
     st.table(summary_df)
 
-    # 3. HR 深入檢視與調整各院所人員明細 (包含「本月離職」勾選欄)
+    # 3. HR 深入檢視與調整各院所人員明細 (雙向完美連動)
     st.markdown("---")
     st.subheader("📋 HR 深入檢視與調整各院所人員明細")
     st.write("請使用下方連動選單選擇欲查看的院所：")
@@ -331,7 +331,8 @@ else:
 
     hr_clinic_df_next_month = staff_df[(staff_df['院所'] == hr_view_clinic) & (staff_df['本月離職'] == False)]
     hr_tot = len(hr_clinic_df_next_month)
-    hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'].str.contains('符合', na=False)])
+    # 精準配對 '🟢 符合'
+    hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'] == '🟢 符合'])
     hr_req = math.ceil(hr_tot / 2) if hr_tot > 0 else 0
     hr_passed = hr_comp >= hr_req and hr_tot > 0
 
@@ -348,7 +349,7 @@ else:
     hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy()
     
     if not hr_editable_df.empty:
-        st.write("✏️ **選擇「符合原因」自動連動資格，本月離職者請勾選「本月離職」：**")
+        st.write("✏️ **人資同仁可直接在下方表格修改資料（修改後點擊儲存）：**")
         hr_edited_df = st.data_editor(
             hr_editable_df,
             column_config={
@@ -368,7 +369,7 @@ else:
         
         if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
             hr_edited_df["符合資格"] = hr_edited_df["符合原因"].map(get_compliance_status)
-            staff_df.loc[staff_df['院所'] == hr_view_clinic, :] = hr_edited_df.values
+            staff_df.update(hr_edited_df)
             save_data(staff_df)
             st.success(f"✅ 已成功更新 [{hr_view_clinic}] 的人員資料並同步至全院總表！")
             st.rerun()
