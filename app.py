@@ -42,7 +42,7 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫
+# 1. 預設資料庫 (完整保留照片中潮州院 10 位同仁原始資料)
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
@@ -98,13 +98,11 @@ if not staff_df.empty and "院所" in staff_df.columns:
     staff_df["區域"] = staff_df["院所"].map(lambda x: CLINIC_TO_REGION.get(x, "屏東"))
 
 # -------------------------------------------------------------------
-# 2. 帳號密碼與權限地圖 (已完整綁定兼任多院權限)
+# 2. 帳號密碼與權限地圖
 # -------------------------------------------------------------------
 USER_CREDENTIALS = {
-    # --- HR 總管理者帳號 ---
     "admin": {"password": "admin123", "role": "HR總管理者", "clinics": ALL_CLINICS, "name": "HR人資部"},
     
-    # --- 27 家院會計帳號與全數對應院所 ---
     "KYW-MK": {"password": "KSY00298", "role": "會計", "clinics": ["亞灣院"], "name": "吳淑婷"},
     "NCM-MK": {"password": "NCK00035", "role": "會計", "clinics": ["民權院", "崇學院"], "name": "李依婷"},
     "NCS-MK": {"password": "NCK00035", "role": "會計", "clinics": ["崇學院", "民權院"], "name": "李依婷"},
@@ -128,7 +126,6 @@ USER_CREDENTIALS = {
     "KWJ-MK": {"password": "KSY00327", "role": "會計", "clinics": ["五甲院", "陽明院"], "name": "黃湘蓉"},
     "KYM-MK": {"password": "KSY00327", "role": "會計", "clinics": ["陽明院", "五甲院"], "name": "黃湘蓉"},
     "DTT-MK": {"password": "DTT02078", "role": "會計", "clinics": ["台東院"], "name": "塗婉瑜"},
-    # 🌟 廖靜敏同仁帳號：已成功授權兼任東港院與潮州院！
     "PDG-MK": {"password": "PHK00041", "role": "會計", "clinics": ["東港院", "潮州院"], "name": "廖靜敏"},
     "PHK-MK": {"password": "PHK00041", "role": "會計", "clinics": ["潮州院", "東港院"], "name": "廖靜敏"},
     "KMH-MK": {"password": "KJG0018",  "role": "會計", "clinics": ["明華院", "建功院"], "name": "賴秀如"},
@@ -197,40 +194,55 @@ def send_line_message(channel_access_token, user_id, message):
 # ===================================================================
 if user["role"] == "會計":
     st.sidebar.markdown("---")
-    st.sidebar.subheader("📍 服務院所 (已開通兼任權限)")
+    st.sidebar.subheader("📍 服務院所 (已鎖定權限)")
     
-    # 根據該會計允許看到的院，反推允許的區域列表
     allowed_regions = list(dict.fromkeys([CLINIC_TO_REGION.get(c, "屏東") for c in allowed_clinics]))
-    
     selected_region = st.sidebar.selectbox("1. 大項「區域」：", allowed_regions)
     
-    # 該區域內，且屬於該會計權限允許的院
     region_clinics = CLINIC_REGIONS[selected_region]
     user_available_clinics = [c for c in region_clinics if c in allowed_clinics]
-    
     selected_clinic = st.sidebar.selectbox("2. 小項「院」：", user_available_clinics)
 
-    st.subheader(f"📍【{selected_region}區】{selected_clinic} - 下個月執登與調薪卡控預測")
+    st.subheader(f"📍【{selected_region}區】{selected_clinic} - 執登與調薪卡控預測")
 
-    clinic_df_next_month = staff_df[(staff_df['院所'] == selected_clinic) & (staff_df['本月離職'] == False)]
+    clinic_all_df = staff_df[staff_df['院所'] == selected_clinic]
     
-    total_nurses_next_month = len(clinic_df_next_month)
-    compliant_nurses_next_month = len(clinic_df_next_month[clinic_df_next_month['符合資格'] == '🟢 符合'])
-    target_needed = math.ceil(total_nurses_next_month / 2) if total_nurses_next_month > 0 else 0
-    is_passed = compliant_nurses_next_month >= target_needed and total_nurses_next_month > 0
+    # 1. 本月現況計算 (全數包含)
+    cur_total = len(clinic_all_df)
+    cur_comp = len(clinic_all_df[clinic_all_df['符合資格'] == '🟢 符合'])
+    cur_req = math.ceil(cur_total / 2) if cur_total > 0 else 0
+    cur_passed = cur_comp >= cur_req and cur_total > 0
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📅 下月預估執登數 (已扣離職)", f"{total_nurses_next_month} 人")
-    col2.metric("符合資格人數", f"{compliant_nurses_next_month} 人")
-    col3.metric("需達標人數 (1/2)", f"{target_needed} 人")
-    
-    if is_passed:
-        col4.success("🟢 下個月預估審核：符合規定")
+    # 2. 下月預估計算 (扣除「本月離職」者)
+    next_df = clinic_all_df[clinic_all_df['本月離職'] == False]
+    next_total = len(next_df)
+    next_comp = len(next_df[next_df['符合資格'] == '🟢 符合'])
+    next_req = math.ceil(next_total / 2) if next_total > 0 else 0
+    next_passed = next_comp >= next_req and next_total > 0
+
+    # 🌟 呈現兩組對比指標卡片
+    st.markdown("##### 📌 **【1. 本月當下現況】**")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("本月執登總人數", f"{cur_total} 人")
+    c2.metric("本月符合資格人數", f"{cur_comp} 人")
+    c3.metric("本月標準門檻 (1/2)", f"{cur_req} 人")
+    if cur_passed:
+        c4.success("🟢 本月現況：符合規定")
     else:
-        col4.error("🔴 下個月預估審核：未達標！")
+        c4.error("🔴 本月現況：未達標！")
+
+    st.markdown("##### 🔮 **【2. 下月預估卡控】（已自動扣除勾選「本月離職」人員）**")
+    n1, n2, n3, n4 = st.columns(4)
+    n1.metric("下月預估執登數", f"{next_total} 人", delta=f"-{cur_total - next_total} 人離職" if cur_total > next_total else None)
+    n2.metric("下月預估符合人數", f"{next_comp} 人", delta=f"-{cur_comp - next_comp} 人" if cur_comp > next_comp else None)
+    n3.metric("下月標準門檻 (1/2)", f"{next_req} 人")
+    if next_passed:
+        n4.success("🟢 下月預估：依然達標！")
+    else:
+        n4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
     st.markdown("---")
-    st.write("✏️ **選擇「符合原因」自動連動資格，可直接填寫「備註」資訊：**")
+    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框（右上角指標將即時重新運算）：**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -299,7 +311,7 @@ if user["role"] == "會計":
 # --- 模式 B：HR 總管理者端 ---
 # ===================================================================
 else:
-    st.subheader("📊 全院護理人員下月執登卡控 - HR總表")
+    st.subheader("📊 全院護理人員執登卡控 - HR總表")
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("📥 系統資料備份與匯出")
@@ -411,7 +423,7 @@ else:
 
     st.markdown("---")
 
-    # 全院總表
+    # 全院總表 (顯示本月現況與下月預估雙指標)
     st.write("🔍 **總表區域篩選**")
     filter_region = st.selectbox("選擇要檢視的區域（或顯示全部）：", ["全部區域"] + list(CLINIC_REGIONS.keys()))
 
@@ -420,19 +432,32 @@ else:
     
     for c in display_clinics:
         c_region = CLINIC_TO_REGION.get(c, "")
-        c_df_next_month = staff_df[(staff_df['院所'] == c) & (staff_df['本月離職'] == False)] if '院所' in staff_df.columns else pd.DataFrame()
-        tot = len(c_df_next_month)
-        comp = len(c_df_next_month[c_df_next_month['符合資格'] == '🟢 符合']) if tot > 0 else 0
-        req = math.ceil(tot / 2) if tot > 0 else 0
-        status = "🟢 達標" if (comp >= req and tot > 0) else ("⚪ 尚未建立名冊" if tot == 0 else "🔴 未達標")
+        c_all_df = staff_df[staff_df['院所'] == c] if '院所' in staff_df.columns else pd.DataFrame()
+        
+        # 本月
+        cur_tot = len(c_all_df)
+        cur_comp = len(c_all_df[c_all_df['符合資格'] == '🟢 符合']) if cur_tot > 0 else 0
+        cur_req = math.ceil(cur_tot / 2) if cur_tot > 0 else 0
+        cur_stat = "🟢 達標" if (cur_comp >= cur_req and cur_tot > 0) else ("⚪ 無資料" if cur_tot == 0 else "🔴 未達標")
+
+        # 下月預估 (扣除本月離職)
+        next_df = c_all_df[c_all_df['本月離職'] == False]
+        next_tot = len(next_df)
+        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
+        next_req = math.ceil(next_tot / 2) if next_tot > 0 else 0
+        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_tot > 0) else ("⚪ 無資料" if next_tot == 0 else "🔴 預估未達標")
         
         summary_list.append({
             "區域": c_region,
             "院所名稱": c,
-            "下月預估執登數 (已扣離職)": tot,
-            "符合資格人數": comp,
-            "標準門檻 (1/2)": req,
-            "下月管控預測": status
+            "本月人數": cur_tot,
+            "本月合規": cur_comp,
+            "本月門檻": cur_req,
+            "本月現況": cur_stat,
+            "下月預估人數": next_tot,
+            "下月預估合規": next_comp,
+            "下月門檻": next_req,
+            "下月卡控預測": next_stat,
         })
     
     summary_df = pd.DataFrame(summary_list)
@@ -447,23 +472,42 @@ else:
     hr_view_region = col_hr_detail_r.selectbox("1. 選擇大項【區域】：", list(CLINIC_REGIONS.keys()), key="hr_view_reg")
     hr_view_clinic = col_hr_detail_c.selectbox("2. 選擇小項【院】：", CLINIC_REGIONS[hr_view_region], key="hr_view_cli")
 
-    st.markdown(f"#### 📍【{hr_view_region}區】{hr_view_clinic} - 下月預估現況")
+    st.markdown(f"#### 📍【{hr_view_region}區】{hr_view_clinic} - 現況與下月預估卡控")
 
-    hr_clinic_df_next_month = staff_df[(staff_df['院所'] == hr_view_clinic) & (staff_df['本月離職'] == False)]
-    hr_tot = len(hr_clinic_df_next_month)
-    hr_comp = len(hr_clinic_df_next_month[hr_clinic_df_next_month['符合資格'] == '🟢 符合'])
-    hr_req = math.ceil(hr_tot / 2) if hr_tot > 0 else 0
-    hr_passed = hr_comp >= hr_req and hr_tot > 0
-
-    col_k1, col_k2, col_k3, col_k4 = st.columns(4)
-    col_k1.metric("下月預估執登數 (已扣離職)", f"{hr_tot} 人")
-    col_k2.metric("符合資格人數", f"{hr_comp} 人")
-    col_k3.metric("需達標人數 (1/2)", f"{hr_req} 人")
+    hr_clinic_all_df = staff_df[staff_df['院所'] == hr_view_clinic]
     
-    if hr_passed:
-        col_k4.success("🟢 預估審核結果：符合規定")
+    # 本月
+    hr_cur_tot = len(hr_clinic_all_df)
+    hr_cur_comp = len(hr_clinic_all_df[hr_clinic_all_df['符合資格'] == '🟢 符合'])
+    hr_cur_req = math.ceil(hr_cur_tot / 2) if hr_cur_tot > 0 else 0
+    hr_cur_passed = hr_cur_comp >= hr_cur_req and hr_cur_tot > 0
+
+    # 下月預估
+    hr_next_df = hr_clinic_all_df[hr_clinic_all_df['本月離職'] == False]
+    hr_next_tot = len(hr_next_df)
+    hr_next_comp = len(hr_next_df[hr_next_df['符合資格'] == '🟢 符合'])
+    hr_next_req = math.ceil(hr_next_tot / 2) if hr_next_tot > 0 else 0
+    hr_next_passed = hr_next_comp >= hr_next_req and hr_next_tot > 0
+
+    st.markdown("##### 📌 **【1. 本月當下現況】**")
+    ck1, ck2, ck3, ck4 = st.columns(4)
+    ck1.metric("本月執登總人數", f"{hr_cur_tot} 人")
+    ck2.metric("本月符合資格人數", f"{hr_cur_comp} 人")
+    ck3.metric("本月標準門檻 (1/2)", f"{hr_cur_req} 人")
+    if hr_cur_passed:
+        ck4.success("🟢 本月現況：符合規定")
     else:
-        col_k4.error("🔴 預估審核結果：未達標！")
+        ck4.error("🔴 本月現況：未達標！")
+
+    st.markdown("##### 🔮 **【2. 下月預估卡控】（已自動扣除勾選「本月離職」人員）**")
+    nk1, nk2, nk3, nk4 = st.columns(4)
+    nk1.metric("下月預估執登數", f"{hr_next_tot} 人", delta=f"-{hr_cur_tot - hr_next_tot} 人離職" if hr_cur_tot > hr_next_tot else None)
+    nk2.metric("下月預估符合人數", f"{hr_next_comp} 人", delta=f"-{hr_cur_comp - hr_next_comp} 人" if hr_cur_comp > hr_next_comp else None)
+    nk3.metric("下月標準門檻 (1/2)", f"{hr_next_req} 人")
+    if hr_next_passed:
+        nk4.success("🟢 下月預估：依然達標！")
+    else:
+        nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
     hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy()
     
@@ -535,7 +579,7 @@ else:
     st.markdown("---")
     st.subheader("🔔 LINE 官方帳號 - 私訊催辦推播")
     
-    unpassed = summary_df[summary_df["下月管控預測"] == "🔴 未達標"]["院所名稱"].tolist() if not summary_df.empty else []
+    unpassed = summary_df[summary_df["下月卡控預測"] == "🔴 預估未達標"]["院所名稱"].tolist() if not summary_df.empty else []
     
     if unpassed:
         st.warning(f"目前下個月預估未達 1/2 標準之院：**{', '.join(unpassed)}**")
