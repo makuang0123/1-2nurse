@@ -42,7 +42,7 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (完整保留照片中潮州院 10 位同仁原始資料)
+# 1. 預設資料庫
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
@@ -190,7 +190,7 @@ def send_line_message(channel_access_token, user_id, message):
         return False
 
 # ===================================================================
-# --- 模式 A：院所會計端 ---
+# --- 模式 A：院所會計端 (加入清冊核對與匯入工具) ---
 # ===================================================================
 if user["role"] == "會計":
     st.sidebar.markdown("---")
@@ -207,20 +207,19 @@ if user["role"] == "會計":
 
     clinic_all_df = staff_df[staff_df['院所'] == selected_clinic]
     
-    # 1. 本月現況計算 (全數包含)
+    # 1. 本月現況計算
     cur_total = len(clinic_all_df)
     cur_comp = len(clinic_all_df[clinic_all_df['符合資格'] == '🟢 符合'])
     cur_req = math.ceil(cur_total / 2) if cur_total > 0 else 0
     cur_passed = cur_comp >= cur_req and cur_total > 0
 
-    # 2. 下月預估計算 (扣除「本月離職」者)
+    # 2. 下月預估計算
     next_df = clinic_all_df[clinic_all_df['本月離職'] == False]
     next_total = len(next_df)
     next_comp = len(next_df[next_df['符合資格'] == '🟢 符合'])
     next_req = math.ceil(next_total / 2) if next_total > 0 else 0
     next_passed = next_comp >= next_req and next_total > 0
 
-    # 🌟 呈現兩組對比指標卡片
     st.markdown("##### 📌 **【1. 本月當下現況】**")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("本月執登總人數", f"{cur_total} 人")
@@ -232,17 +231,71 @@ if user["role"] == "會計":
         c4.error("🔴 本月現況：未達標！")
 
     st.markdown("##### 🔮 **【2. 下月預估卡控】（已自動扣除勾選「本月離職」人員）**")
-    n1, n2, n3, n4 = st.columns(4)
-    n1.metric("下月預估執登數", f"{next_total} 人", delta=f"-{cur_total - next_total} 人離職" if cur_total > next_total else None)
-    n2.metric("下月預估符合人數", f"{next_comp} 人", delta=f"-{cur_comp - next_comp} 人" if cur_comp > next_comp else None)
-    n3.metric("下月標準門檻 (1/2)", f"{next_req} 人")
+    nk1, nk2, nk3, nk4 = st.columns(4)
+    nk1.metric("下月預估執登數", f"{next_total} 人", delta=f"-{cur_total - next_total} 人離職" if cur_total > next_total else None)
+    nk2.metric("下月預估符合人數", f"{next_comp} 人", delta=f"-{cur_comp - next_comp} 人" if cur_comp > next_comp else None)
+    nk3.metric("下月標準門檻 (1/2)", f"{next_req} 人")
     if next_passed:
-        n4.success("🟢 下月預估：依然達標！")
+        nk4.success("🟢 下月預估：依然達標！")
     else:
-        n4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
+        nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
+
+    # 🌟 新增：會計專屬「衛福部/健保署執業清冊核對與匯入」區
+    st.markdown("---")
+    with st.expander(f"📄 上傳【{selected_clinic}】健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」比對與匯入母數", expanded=False):
+        st.write(f"可直接上傳從衛福部或健保局下載之 [{selected_clinic}] 執業清冊，系統會自動核對執登護理人員母數：")
+        clinic_prsn_file = st.file_uploader(f"選擇 [{selected_clinic}] 執業清冊 (.xls / .xlsx)", type=["xls", "xlsx"], key="clinic_prsn_uploader")
+        
+        if clinic_prsn_file is not None:
+            try:
+                uploaded_prsn_df = pd.read_excel(clinic_prsn_file)
+                if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
+                    nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
+                    
+                    # 抓取目前系統中該院現有姓名
+                    existing_names = set(clinic_all_df['姓名'].tolist())
+                    
+                    nurses_in_file['比對狀態'] = nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in existing_names else '🆕 新執登人員')
+                    
+                    st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。比對結果如下：")
+                    
+                    display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in nurses_in_file.columns]
+                    st.dataframe(nurses_in_file[display_cols], use_container_width=True)
+                    
+                    new_nurses = nurses_in_file[nurses_in_file['比對狀態'] == '🆕 新執登人員']
+                    
+                    if not new_nurses.empty:
+                        st.warning(f"偵測到有 **{len(new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
+                        if st.button(f"🚀 一鍵將 {len(new_nurses)} 位新執登護理師同步匯入至 [{selected_clinic}] 名冊"):
+                            new_rows = []
+                            for _, row in new_nurses.iterrows():
+                                arr_d = str(row.get('執業起日', ''))
+                                new_rows.append({
+                                    "區域": selected_region,
+                                    "院所": selected_clinic,
+                                    "姓名": row['姓名'],
+                                    "執業類別": row['執業類別'],
+                                    "身份": "舊有員工",
+                                    "到職日": arr_d,
+                                    "符合原因": "無調薪",
+                                    "符合資格": "🔴 不符合",
+                                    "本月離職": False,
+                                    "備註": "自衛福部清冊自動同步"
+                                })
+                            merged_staff_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
+                            save_data(merged_staff_df)
+                            st.balloons()
+                            st.success(f"🎉 成功同步！已為 [{selected_clinic}] 新增 {len(new_nurses)} 位護理人員！")
+                            st.rerun()
+                    else:
+                        st.success("🎉 核對完成！清冊中的所有護理人員皆已包含在系統名冊中，母數完全正確！")
+                else:
+                    st.error("❌ 檔案格式不符，請確認檔案包含「執業類別」與「姓名」欄位。")
+            except Exception as e:
+                st.error(f"檔案讀取失敗：{e}")
 
     st.markdown("---")
-    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框（右上角指標將即時重新運算）：**")
+    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框：**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -423,7 +476,7 @@ else:
 
     st.markdown("---")
 
-    # 全院總表 (顯示本月現況與下月預估雙指標)
+    # 全院總表
     st.write("🔍 **總表區域篩選**")
     filter_region = st.selectbox("選擇要檢視的區域（或顯示全部）：", ["全部區域"] + list(CLINIC_REGIONS.keys()))
 
@@ -434,13 +487,11 @@ else:
         c_region = CLINIC_TO_REGION.get(c, "")
         c_all_df = staff_df[staff_df['院所'] == c] if '院所' in staff_df.columns else pd.DataFrame()
         
-        # 本月
         cur_tot = len(c_all_df)
         cur_comp = len(c_all_df[c_all_df['符合資格'] == '🟢 符合']) if cur_tot > 0 else 0
         cur_req = math.ceil(cur_tot / 2) if cur_tot > 0 else 0
         cur_stat = "🟢 達標" if (cur_comp >= cur_req and cur_tot > 0) else ("⚪ 無資料" if cur_tot == 0 else "🔴 未達標")
 
-        # 下月預估 (扣除本月離職)
         next_df = c_all_df[c_all_df['本月離職'] == False]
         next_tot = len(next_df)
         next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
@@ -476,13 +527,11 @@ else:
 
     hr_clinic_all_df = staff_df[staff_df['院所'] == hr_view_clinic]
     
-    # 本月
     hr_cur_tot = len(hr_clinic_all_df)
     hr_cur_comp = len(hr_clinic_all_df[hr_clinic_all_df['符合資格'] == '🟢 符合'])
     hr_cur_req = math.ceil(hr_cur_tot / 2) if hr_cur_tot > 0 else 0
     hr_cur_passed = hr_cur_comp >= hr_cur_req and hr_cur_tot > 0
 
-    # 下月預估
     hr_next_df = hr_clinic_all_df[hr_clinic_all_df['本月離職'] == False]
     hr_next_tot = len(hr_next_df)
     hr_next_comp = len(hr_next_df[hr_next_df['符合資格'] == '🟢 符合'])
