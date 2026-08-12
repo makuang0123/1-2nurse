@@ -24,7 +24,7 @@ CLINIC_REGIONS = {
 ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clinics]
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
-# 選項清單 (包含新匯入未選擇警示)
+# 選項清單
 REASON_OPTIONS = ["⚠️ 請選取原因", "調薪", "新到職符合級距", "無調薪", "新到職不符合級距"]
 
 def get_compliance_status(reason):
@@ -45,7 +45,7 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫 (包含潮州院原始資料)
+# 1. 預設資料庫
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
@@ -92,7 +92,6 @@ for col in required_cols:
         else:
             staff_df[col] = ""
 
-# 確保型態正確
 staff_df["本月離職"] = staff_df["本月離職"].fillna(False).astype(bool)
 staff_df["到職日"] = staff_df["到職日"].fillna("").astype(str)
 staff_df["備註"] = staff_df["備註"].fillna("").astype(str)
@@ -172,7 +171,7 @@ if st.sidebar.button("🚪 登出系統"):
     st.rerun()
 
 # -------------------------------------------------------------------
-# 3. 資料儲存與 LINE 發送函數 (確保勾選狀態完整保留)
+# 3. 資料儲存與 LINE 發送函數
 # -------------------------------------------------------------------
 def save_data(new_df):
     new_df["本月離職"] = new_df["本月離職"].fillna(False).astype(bool)
@@ -198,7 +197,7 @@ def send_line_message(channel_access_token, user_id, message):
         return False
 
 # ===================================================================
-# --- 模式 A：院所會計端 ---
+# --- 模式 A：院所會計端 (包含雙向稽核清冊核對) ---
 # ===================================================================
 if user["role"] == "會計":
     st.sidebar.markdown("---")
@@ -221,7 +220,7 @@ if user["role"] == "會計":
     cur_req = math.ceil(cur_total / 2) if cur_total > 0 else 0
     cur_passed = cur_comp >= cur_req and cur_total > 0
 
-    # 2. 下月預估計算 (扣除本月離職)
+    # 2. 下月預估計算
     next_df = clinic_all_df[clinic_all_df['本月離職'] == False]
     next_total = len(next_df)
     next_comp = len(next_df[next_df['符合資格'] == '🟢 符合'])
@@ -248,10 +247,10 @@ if user["role"] == "會計":
     else:
         nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
-    # 會計專屬「衛福部/健保署執業清冊核對與匯入」區
+    # 🌟 雙向交叉比對衛福部/健保署清冊
     st.markdown("---")
-    with st.expander(f"📄 上傳【{selected_clinic}】健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」比對與匯入母數", expanded=False):
-        st.write(f"可直接上傳從衛福部或健保局下載之 [{selected_clinic}] 執業清冊，系統會自動核對執登護理人員母數：")
+    with st.expander(f"📄 上傳【{selected_clinic}】健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」雙向對帳與比對", expanded=False):
+        st.write(f"上傳衛福部清冊後，系統會自動與系統母數進行【雙向比對】（核對缺漏與多出人員）：")
         clinic_prsn_file = st.file_uploader(f"選擇 [{selected_clinic}] 執業清冊 (.xls / .xlsx)", type=["xls", "xlsx"], key="clinic_prsn_uploader")
         
         if clinic_prsn_file is not None:
@@ -260,15 +259,26 @@ if user["role"] == "會計":
                 if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
                     nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
                     
-                    existing_names = set(clinic_all_df['姓名'].tolist())
-                    nurses_in_file['比對狀態'] = nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in existing_names else '🆕 新執登人員')
+                    file_names = set(nurses_in_file['姓名'].tolist())
+                    sys_names = set(clinic_all_df['姓名'].tolist())
                     
-                    st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。比對結果如下：")
+                    # 1. 清冊比對
+                    nurses_in_file['比對狀態'] = nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
+                    
+                    st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。清冊比對明細：")
                     
                     display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in nurses_in_file.columns]
                     st.dataframe(nurses_in_file[display_cols], use_container_width=True)
                     
-                    new_nurses = nurses_in_file[nurses_in_file['比對狀態'] == '🆕 新執登人員']
+                    # 2. 🌟 雙向比對：找出「系統有，但清冊沒有」多出來的人員（疑已退保/離職）
+                    extra_in_sys = [name for name in sys_names if name not in file_names]
+                    
+                    if extra_in_sys:
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
+                        st.info("💡 提示：若上述人員已離職，請於下方表格中將其勾選為「☑️ 本月離職」或執行批量移除。")
+
+                    new_nurses = nurses_in_file[nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     
                     if not new_nurses.empty:
                         st.warning(f"偵測到有 **{len(new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
@@ -283,7 +293,7 @@ if user["role"] == "會計":
                                     "執業類別": row['執業類別'],
                                     "身份": "舊有員工",
                                     "到職日": arr_d,
-                                    "符合原因": "⚠️ 請選取原因",  # 🌟 預設請選取原因
+                                    "符合原因": "⚠️ 請選取原因",
                                     "符合資格": "⚠️ 未選擇",
                                     "本月離職": False,
                                     "備註": "自衛福部清冊自動同步"
@@ -293,8 +303,8 @@ if user["role"] == "會計":
                             st.balloons()
                             st.success(f"🎉 成功同步！已為 [{selected_clinic}] 新增 {len(new_nurses)} 位護理人員！")
                             st.rerun()
-                    else:
-                        st.success("🎉 核對完成！清冊中的所有護理人員皆已包含在系統名冊中，母數完全正確！")
+                    elif not extra_in_sys:
+                        st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
                 else:
                     st.error("❌ 檔案格式不符，請確認檔案包含「執業類別」與「姓名」欄位。")
             except Exception as e:
@@ -314,7 +324,7 @@ if user["role"] == "會計":
             "執業類別": st.column_config.TextColumn("類別", disabled=True),
             "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
             "到職日": st.column_config.TextColumn("到職日"),
-            "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若為新匯入資料，請選取符合原因"),
+            "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若顯示請選取原因，請下拉為同仁選擇符合原因"),
             "符合資格": st.column_config.TextColumn("符合資格 (自動判定)", disabled=True),
             "本月離職": st.column_config.CheckboxColumn("本月離職 (勾選則下月扣除)", default=False),
             "備註": st.column_config.TextColumn("備註"),
@@ -326,7 +336,6 @@ if user["role"] == "會計":
     )
 
     if st.button("💾 儲存並更新變更"):
-        # 確保【本月離職】與【符合原因】完整保留與傳遞
         other_clinics_df = staff_df[staff_df['院所'] != selected_clinic]
         edited_df["本月離職"] = edited_df["本月離職"].fillna(False).astype(bool)
         edited_df["符合原因"] = edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
@@ -452,7 +461,7 @@ else:
                                 "執業類別": title,
                                 "身份": "舊有員工",
                                 "到職日": arr_date,
-                                "符合原因": "⚠️ 請選取原因",  # 🌟 預設請選取原因
+                                "符合原因": "⚠️ 請選取原因",
                                 "符合資格": "⚠️ 未選擇",
                                 "本月離職": False,
                                 "備註": memo_val
@@ -581,7 +590,7 @@ else:
                 "執業類別": st.column_config.TextColumn("類別"),
                 "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
                 "到職日": st.column_config.TextColumn("到職日"),
-                "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若為新匯入資料，請選取符合原因"),
+                "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若顯示請選取原因，請下拉為同仁選擇符合原因"),
                 "符合資格": st.column_config.TextColumn("符合資格 (自動判定)", disabled=True),
                 "本月離職": st.column_config.CheckboxColumn("本月離職 (勾選則下月扣除)", default=False),
                 "備註": st.column_config.TextColumn("備註"),
