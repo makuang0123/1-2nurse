@@ -24,12 +24,15 @@ CLINIC_REGIONS = {
 ALL_CLINICS = [clinic for clinics in CLINIC_REGIONS.values() for clinic in clinics]
 CLINIC_TO_REGION = {clinic: region for region, clinics in CLINIC_REGIONS.items() for clinic in clinics}
 
-REASON_OPTIONS = ["調薪", "新到職符合級距", "無調薪", "新到職不符合級距"]
+# 選項清單 (包含新匯入未選擇警示)
+REASON_OPTIONS = ["⚠️ 請選取原因", "調薪", "新到職符合級距", "無調薪", "新到職不符合級距"]
 
 def get_compliance_status(reason):
     if reason in ["調薪", "新到職符合級距"]:
         return "🟢 符合"
-    return "🔴 不符合"
+    elif reason in ["無調薪", "新到職不符合級距"]:
+        return "🔴 不符合"
+    return "⚠️ 未選擇"
 
 def normalize_clinic_name(location_str):
     if not isinstance(location_str, str):
@@ -42,7 +45,7 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 預設資料庫
+# 1. 預設資料庫 (包含潮州院原始資料)
 # -------------------------------------------------------------------
 DEFAULT_NURSES = [
     {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
@@ -77,9 +80,9 @@ required_cols = ["區域", "院所", "姓名", "執業類別", "身份", "到職
 for col in required_cols:
     if col not in staff_df.columns:
         if col == "符合原因":
-            staff_df[col] = "無調薪"
+            staff_df[col] = "⚠️ 請選取原因"
         elif col == "符合資格":
-            staff_df[col] = "🔴 不符合"
+            staff_df[col] = "⚠️ 未選擇"
         elif col == "身份":
             staff_df[col] = "舊有員工"
         elif col == "本月離職":
@@ -89,9 +92,11 @@ for col in required_cols:
         else:
             staff_df[col] = ""
 
+# 確保型態正確
 staff_df["本月離職"] = staff_df["本月離職"].fillna(False).astype(bool)
 staff_df["到職日"] = staff_df["到職日"].fillna("").astype(str)
 staff_df["備註"] = staff_df["備註"].fillna("").astype(str)
+staff_df["符合原因"] = staff_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
 staff_df["符合資格"] = staff_df["符合原因"].map(get_compliance_status)
 
 if not staff_df.empty and "院所" in staff_df.columns:
@@ -167,10 +172,13 @@ if st.sidebar.button("🚪 登出系統"):
     st.rerun()
 
 # -------------------------------------------------------------------
-# 3. 資料儲存與 LINE 發送函數
+# 3. 資料儲存與 LINE 發送函數 (確保勾選狀態完整保留)
 # -------------------------------------------------------------------
 def save_data(new_df):
+    new_df["本月離職"] = new_df["本月離職"].fillna(False).astype(bool)
+    new_df["符合原因"] = new_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
     new_df["符合資格"] = new_df["符合原因"].map(get_compliance_status)
+    
     st.session_state.db_staff = new_df.copy()
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -190,7 +198,7 @@ def send_line_message(channel_access_token, user_id, message):
         return False
 
 # ===================================================================
-# --- 模式 A：院所會計端 (加入清冊核對與匯入工具) ---
+# --- 模式 A：院所會計端 ---
 # ===================================================================
 if user["role"] == "會計":
     st.sidebar.markdown("---")
@@ -213,7 +221,7 @@ if user["role"] == "會計":
     cur_req = math.ceil(cur_total / 2) if cur_total > 0 else 0
     cur_passed = cur_comp >= cur_req and cur_total > 0
 
-    # 2. 下月預估計算
+    # 2. 下月預估計算 (扣除本月離職)
     next_df = clinic_all_df[clinic_all_df['本月離職'] == False]
     next_total = len(next_df)
     next_comp = len(next_df[next_df['符合資格'] == '🟢 符合'])
@@ -240,7 +248,7 @@ if user["role"] == "會計":
     else:
         nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
-    # 🌟 新增：會計專屬「衛福部/健保署執業清冊核對與匯入」區
+    # 會計專屬「衛福部/健保署執業清冊核對與匯入」區
     st.markdown("---")
     with st.expander(f"📄 上傳【{selected_clinic}】健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」比對與匯入母數", expanded=False):
         st.write(f"可直接上傳從衛福部或健保局下載之 [{selected_clinic}] 執業清冊，系統會自動核對執登護理人員母數：")
@@ -252,9 +260,7 @@ if user["role"] == "會計":
                 if '執業類別' in uploaded_prsn_df.columns and '姓名' in uploaded_prsn_df.columns:
                     nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
                     
-                    # 抓取目前系統中該院現有姓名
                     existing_names = set(clinic_all_df['姓名'].tolist())
-                    
                     nurses_in_file['比對狀態'] = nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in existing_names else '🆕 新執登人員')
                     
                     st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。比對結果如下：")
@@ -277,8 +283,8 @@ if user["role"] == "會計":
                                     "執業類別": row['執業類別'],
                                     "身份": "舊有員工",
                                     "到職日": arr_d,
-                                    "符合原因": "無調薪",
-                                    "符合資格": "🔴 不符合",
+                                    "符合原因": "⚠️ 請選取原因",  # 🌟 預設請選取原因
+                                    "符合資格": "⚠️ 未選擇",
                                     "本月離職": False,
                                     "備註": "自衛福部清冊自動同步"
                                 })
@@ -295,7 +301,7 @@ if user["role"] == "會計":
                 st.error(f"檔案讀取失敗：{e}")
 
     st.markdown("---")
-    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框：**")
+    st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框（右上角指標將即時重新運算）：**")
 
     editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
     
@@ -308,7 +314,7 @@ if user["role"] == "會計":
             "執業類別": st.column_config.TextColumn("類別", disabled=True),
             "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
             "到職日": st.column_config.TextColumn("到職日"),
-            "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True),
+            "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若為新匯入資料，請選取符合原因"),
             "符合資格": st.column_config.TextColumn("符合資格 (自動判定)", disabled=True),
             "本月離職": st.column_config.CheckboxColumn("本月離職 (勾選則下月扣除)", default=False),
             "備註": st.column_config.TextColumn("備註"),
@@ -320,13 +326,17 @@ if user["role"] == "會計":
     )
 
     if st.button("💾 儲存並更新變更"):
+        # 確保【本月離職】與【符合原因】完整保留與傳遞
         other_clinics_df = staff_df[staff_df['院所'] != selected_clinic]
+        edited_df["本月離職"] = edited_df["本月離職"].fillna(False).astype(bool)
+        edited_df["符合原因"] = edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
         edited_df["符合資格"] = edited_df["符合原因"].map(get_compliance_status)
         edited_df["區域"] = selected_region
         edited_df["院所"] = selected_clinic
+        
         new_staff_df = pd.concat([other_clinics_df, edited_df], ignore_index=True)
         save_data(new_staff_df)
-        st.success("✅ 修改內容已成功儲存！")
+        st.success("✅ 修改與離職勾選紀錄已成功儲存！")
         st.rerun()
 
     st.markdown("---")
@@ -442,8 +452,8 @@ else:
                                 "執業類別": title,
                                 "身份": "舊有員工",
                                 "到職日": arr_date,
-                                "符合原因": "無調薪",
-                                "符合資格": "🔴 不符合",
+                                "符合原因": "⚠️ 請選取原因",  # 🌟 預設請選取原因
+                                "符合資格": "⚠️ 未選擇",
                                 "本月離職": False,
                                 "備註": memo_val
                             })
@@ -571,7 +581,7 @@ else:
                 "執業類別": st.column_config.TextColumn("類別"),
                 "身份": st.column_config.SelectboxColumn("身份別", options=["舊有員工", "新進人員"], required=True),
                 "到職日": st.column_config.TextColumn("到職日"),
-                "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True),
+                "符合原因": st.column_config.SelectboxColumn("符合原因", options=REASON_OPTIONS, required=True, help="⚠️ 若為新匯入資料，請選取符合原因"),
                 "符合資格": st.column_config.TextColumn("符合資格 (自動判定)", disabled=True),
                 "本月離職": st.column_config.CheckboxColumn("本月離職 (勾選則下月扣除)", default=False),
                 "備註": st.column_config.TextColumn("備註"),
@@ -584,6 +594,8 @@ else:
         
         if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
             other_clinics_df = staff_df[staff_df['院所'] != hr_view_clinic]
+            hr_edited_df["本月離職"] = hr_edited_df["本月離職"].fillna(False).astype(bool)
+            hr_edited_df["符合原因"] = hr_edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
             hr_edited_df["符合資格"] = hr_edited_df["符合原因"].map(get_compliance_status)
             hr_edited_df["區域"] = hr_view_region
             hr_edited_df["院所"] = hr_view_clinic
