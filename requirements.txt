@@ -1,6 +1,7 @@
 streamlit
 pandas
+streamlit-gsheets
 requests
-st-gsheets-connection
+sqlalchemy
+psycopg2-binary
 openpyxl
-xlrd
