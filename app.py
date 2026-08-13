@@ -51,21 +51,8 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 資料庫連線配置 (安全防呆)
+# 1. 資料庫連線配置 (完全清空預設名單，由使用者匯入記憶)
 # -------------------------------------------------------------------
-DEFAULT_NURSES = [
-    {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "林庭如", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2021/01/04", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "李晨寧", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2022/11/02", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "趙育萱", "執業類別": "兼職護理人員", "身份": "舊有員工", "到職日": "2024/04/08", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "陳靖誼", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2024/07/15", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "蔡函紜", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/02/17", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "梁淑雅", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/06/02", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "莊羽樺", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2026/05/18", "符合原因": "新到職不符合級距", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "莊慈慈", "執業類別": "儲備護理人員", "身份": "舊有員工", "到職日": "2026/08/10", "符合原因": "新到職符合級距", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-    {"區域": "屏東", "院所": "潮州院", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "到職日": "2008/01/01", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-]
-
 DB_URL = st.secrets.get("DB_URL", "sqlite:///local_test.db")
 
 def load_staff_data():
@@ -77,7 +64,7 @@ def load_staff_data():
                 return df
         except Exception:
             pass
-    return pd.DataFrame(DEFAULT_NURSES)
+    return pd.DataFrame(columns=["區域", "院所", "姓名", "執業類別", "身份", "到職日", "符合原因", "符合資格", "本月離職", "備註"])
 
 if 'db_staff' not in st.session_state:
     st.session_state.db_staff = load_staff_data()
@@ -219,18 +206,18 @@ if user["role"] == "會計":
 
     st.subheader(f"📍【{selected_region}區】{selected_clinic} - 執登與調薪卡控預測")
 
-    clinic_all_df = staff_df[staff_df['院所'] == selected_clinic]
+    clinic_all_df = staff_df[staff_df['院所'] == selected_clinic] if not staff_df.empty else pd.DataFrame()
     
     # 1. 本月現況計算
     cur_total = len(clinic_all_df)
-    cur_comp = len(clinic_all_df[clinic_all_df['符合資格'] == '🟢 符合'])
+    cur_comp = len(clinic_all_df[clinic_all_df['符合資格'] == '🟢 符合']) if cur_total > 0 else 0
     cur_req = math.ceil(cur_total / 2) if cur_total > 0 else 0
     cur_passed = cur_comp >= cur_req and cur_total > 0
 
     # 2. 下月預估計算
-    next_df = clinic_all_df[clinic_all_df['本月離職'] == False]
+    next_df = clinic_all_df[clinic_all_df['本月離職'] == False] if cur_total > 0 else pd.DataFrame()
     next_total = len(next_df)
-    next_comp = len(next_df[next_df['符合資格'] == '🟢 符合'])
+    next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_total > 0 else 0
     next_req = math.ceil(next_total / 2) if next_total > 0 else 0
     next_passed = next_comp >= next_req and next_total > 0
 
@@ -267,7 +254,7 @@ if user["role"] == "會計":
                     nurses_in_file = uploaded_prsn_df[uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
                     
                     file_names = set(nurses_in_file['姓名'].tolist())
-                    sys_names = set(clinic_all_df['姓名'].tolist())
+                    sys_names = set(clinic_all_df['姓名'].tolist()) if not clinic_all_df.empty else set()
                     
                     nurses_in_file['比對狀態'] = nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
                     
@@ -317,7 +304,7 @@ if user["role"] == "會計":
     st.markdown("---")
     st.write("✏️ **選擇「符合原因」自動連動資格，若本月有離職請勾選「本月離職」框框：**")
 
-    editable_df = staff_df[staff_df['院所'] == selected_clinic].copy()
+    editable_df = staff_df[staff_df['院所'] == selected_clinic].copy() if not staff_df.empty else pd.DataFrame()
     
     edited_df = st.data_editor(
         editable_df,
@@ -340,7 +327,7 @@ if user["role"] == "會計":
     )
 
     if st.button("💾 儲存並更新變更"):
-        other_clinics_df = staff_df[staff_df['院所'] != selected_clinic]
+        other_clinics_df = staff_df[staff_df['院所'] != selected_clinic] if not staff_df.empty else pd.DataFrame()
         edited_df["本月離職"] = edited_df["本月離職"].fillna(False).astype(bool)
         edited_df["符合原因"] = edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
         edited_df["符合資格"] = edited_df["符合原因"].map(get_compliance_status)
@@ -354,7 +341,7 @@ if user["role"] == "會計":
 
     st.markdown("---")
     with st.expander("🗑️ 批量移除/刪除已離職人員名單"):
-        current_names = editable_df["姓名"].tolist() if not editable_df.empty else []
+        current_names = editable_df["姓名"].tolist() if not editable_df.empty and "姓名" in editable_df.columns else []
         if current_names:
             remove_names = st.multiselect("選擇要從系統永久移除的人員：", current_names)
             if st.button("❌ 確認移除選取的人員"):
@@ -391,7 +378,7 @@ else:
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("📥 系統資料備份與匯出")
-    csv_data = staff_df.to_csv(index=False).encode('utf-8-sig')
+    csv_data = staff_df.to_csv(index=False).encode('utf-8-sig') if not staff_df.empty else "".encode('utf-8-sig')
     st.sidebar.download_button(
         label="💾 匯出最新完整資料庫 (.csv)",
         data=csv_data,
@@ -504,14 +491,14 @@ else:
     
     for c in display_clinics:
         c_region = CLINIC_TO_REGION.get(c, "")
-        c_all_df = staff_df[staff_df['院所'] == c] if '院所' in staff_df.columns else pd.DataFrame()
+        c_all_df = staff_df[staff_df['院所'] == c] if not staff_df.empty and '院所' in staff_df.columns else pd.DataFrame()
         
         cur_tot = len(c_all_df)
         cur_comp = len(c_all_df[c_all_df['符合資格'] == '🟢 符合']) if cur_tot > 0 else 0
         cur_req = math.ceil(cur_tot / 2) if cur_tot > 0 else 0
         cur_stat = "🟢 達標" if (cur_comp >= cur_req and cur_tot > 0) else ("⚪ 無資料" if cur_tot == 0 else "🔴 未達標")
 
-        next_df = c_all_df[c_all_df['本月離職'] == False]
+        next_df = c_all_df[c_all_df['本月離職'] == False] if cur_tot > 0 else pd.DataFrame()
         next_tot = len(next_df)
         next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
         next_req = math.ceil(next_tot / 2) if next_tot > 0 else 0
@@ -544,16 +531,16 @@ else:
 
     st.markdown(f"#### 📍【{hr_view_region}區】{hr_view_clinic} - 現況與下月預估卡控")
 
-    hr_clinic_all_df = staff_df[staff_df['院所'] == hr_view_clinic]
+    hr_clinic_all_df = staff_df[staff_df['院所'] == hr_view_clinic] if not staff_df.empty else pd.DataFrame()
     
     hr_cur_tot = len(hr_clinic_all_df)
-    hr_cur_comp = len(hr_clinic_all_df[hr_clinic_all_df['符合資格'] == '🟢 符合'])
+    hr_cur_comp = len(hr_clinic_all_df[hr_clinic_all_df['符合資格'] == '🟢 符合']) if hr_cur_tot > 0 else 0
     hr_cur_req = math.ceil(hr_cur_tot / 2) if hr_cur_tot > 0 else 0
     hr_cur_passed = hr_cur_comp >= hr_cur_req and hr_cur_tot > 0
 
-    hr_next_df = hr_clinic_all_df[hr_clinic_all_df['本月離職'] == False]
+    hr_next_df = hr_clinic_all_df[hr_clinic_all_df['本月離職'] == False] if hr_cur_tot > 0 else pd.DataFrame()
     hr_next_tot = len(hr_next_df)
-    hr_next_comp = len(hr_next_df[hr_next_df['符合資格'] == '🟢 符合'])
+    hr_next_comp = len(hr_next_df[hr_next_df['符合資格'] == '🟢 符合']) if hr_next_tot > 0 else 0
     hr_next_req = math.ceil(hr_next_tot / 2) if hr_next_tot > 0 else 0
     hr_next_passed = hr_next_comp >= hr_next_req and hr_next_tot > 0
 
@@ -577,7 +564,7 @@ else:
     else:
         nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
-    hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy()
+    hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy() if not staff_df.empty else pd.DataFrame()
     
     if not hr_editable_df.empty:
         st.write("✏️ **人資同仁可直接在下方表格修改資料（修改後點擊儲存）：**")
@@ -602,7 +589,7 @@ else:
         )
         
         if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
-            other_clinics_df = staff_df[staff_df['院所'] != hr_view_clinic]
+            other_clinics_df = staff_df[staff_df['院所'] != hr_view_clinic] if not staff_df.empty else pd.DataFrame()
             hr_edited_df["本月離職"] = hr_edited_df["本月離職"].fillna(False).astype(bool)
             hr_edited_df["符合原因"] = hr_edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
             hr_edited_df["符合資格"] = hr_edited_df["符合原因"].map(get_compliance_status)
@@ -615,7 +602,7 @@ else:
             st.rerun()
 
         with st.expander(f"🗑️ 批量移除/刪除 [{hr_view_clinic}] 已離職人員名單"):
-            hr_current_names = hr_editable_df["姓名"].tolist() if not hr_editable_df.empty else []
+            hr_current_names = hr_editable_df["姓名"].tolist() if not hr_editable_df.empty and "姓名" in hr_editable_df.columns else []
             if hr_current_names:
                 hr_remove_names = st.multiselect("選擇要從系統永久移除的人員：", hr_current_names, key="hr_multiselect_del")
                 if st.button("❌ 確認移除選取的人員", key="hr_btn_del"):
