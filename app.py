@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 import math
 import requests
-from sqlalchemy import create_engine, text
+from streamlit_gsheets import GSheetsConnection
+
+# 嘗試載入 SQLAlchemy (若尚未安裝則降級保護)
+try:
+    from sqlalchemy import create_engine
+    HAS_SQLALCHEMY = True
+except ImportError:
+    HAS_SQLALCHEMY = False
 
 # 頁面標題與配置
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
@@ -44,47 +51,36 @@ def normalize_clinic_name(location_str):
     return "博愛院"
 
 # -------------------------------------------------------------------
-# 1. 建立 PostgreSQL 資料庫連線
+# 1. 資料庫連線配置 (安全防呆)
 # -------------------------------------------------------------------
-# 優先讀取 Streamlit Secrets / 本地配置；若未設定則預設連線本地資料庫
-DB_URL = st.secrets.get("DB_URL", "postgresql://postgres:root1234@localhost:5432/nurse_db")
+DEFAULT_NURSES = [
+    {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "林庭如", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2021/01/04", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "李晨寧", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2022/11/02", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "趙育萱", "執業類別": "兼職護理人員", "身份": "舊有員工", "到職日": "2024/04/08", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "陳靖誼", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2024/07/15", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "蔡函紜", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/02/17", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "梁淑雅", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/06/02", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "莊羽樺", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2026/05/18", "符合原因": "新到職不符合級距", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "莊慈慈", "執業類別": "儲備護理人員", "身份": "舊有員工", "到職日": "2026/08/10", "符合原因": "新到職符合級距", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
+    {"區域": "屏東", "院所": "潮州院", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "到職日": "2008/01/01", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
+]
 
-@st.cache_resource
-def get_db_engine():
-    return create_engine(DB_URL)
+DB_URL = st.secrets.get("DB_URL", "sqlite:///local_test.db")
 
-engine = get_db_engine()
-
-# 初始化與讀取資料庫
-def load_data_from_db():
-    try:
-        df = pd.read_sql("SELECT * FROM staff", engine)
-        if not df.empty:
-            return df
-    except Exception:
-        pass
-    
-    # 預設潮州院 10 位同仁初值
-    default_data = pd.DataFrame([
-        {"區域": "屏東", "院所": "潮州院", "姓名": "黃玉芬", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2002/08/03", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "林庭如", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2021/01/04", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "李晨寧", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2022/11/02", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "趙育萱", "執業類別": "兼職護理人員", "身份": "舊有員工", "到職日": "2024/04/08", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "陳靖誼", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2024/07/15", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "蔡函紜", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/02/17", "符合原因": "調薪", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "梁淑雅", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2025/06/02", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "莊羽樺", "執業類別": "護理人員", "身份": "舊有員工", "到職日": "2026/05/18", "符合原因": "新到職不符合級距", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "莊慈慈", "執業類別": "儲備護理人員", "身份": "舊有員工", "到職日": "2026/08/10", "符合原因": "新到職符合級距", "符合資格": "🟢 符合", "本月離職": False, "備註": ""},
-        {"區域": "屏東", "院所": "潮州院", "姓名": "廖靜敏", "執業類別": "護士", "身份": "舊有員工", "到職日": "2008/01/01", "符合原因": "無調薪", "符合資格": "🔴 不符合", "本月離職": False, "備註": ""},
-    ])
-    try:
-        default_data.to_sql("staff", engine, if_exists="replace", index=False)
-    except Exception:
-        pass
-    return default_data
+def load_staff_data():
+    if HAS_SQLALCHEMY:
+        try:
+            eng = create_engine(DB_URL)
+            df = pd.read_sql("SELECT * FROM staff", eng)
+            if not df.empty:
+                return df
+        except Exception:
+            pass
+    return pd.DataFrame(DEFAULT_NURSES)
 
 if 'db_staff' not in st.session_state:
-    st.session_state.db_staff = load_data_from_db()
+    st.session_state.db_staff = load_staff_data()
 
 staff_df = st.session_state.db_staff
 
@@ -180,7 +176,7 @@ if st.sidebar.button("🚪 登出系統"):
     st.rerun()
 
 # -------------------------------------------------------------------
-# 3. 資料庫真實寫入函數 (修改即刻永久存入資料庫)
+# 3. 資料儲存與 LINE 發送函數
 # -------------------------------------------------------------------
 def save_data(new_df):
     new_df["本月離職"] = new_df["本月離職"].fillna(False).astype(bool)
@@ -189,11 +185,12 @@ def save_data(new_df):
     
     st.session_state.db_staff = new_df.copy()
     
-    # 寫入 SQL 資料庫
-    try:
-        new_df.to_sql("staff", engine, if_exists="replace", index=False)
-    except Exception as e:
-        st.warning(f"資料庫寫入警告：{e}")
+    if HAS_SQLALCHEMY:
+        try:
+            eng = create_engine(DB_URL)
+            new_df.to_sql("staff", eng, if_exists="replace", index=False)
+        except Exception:
+            pass
 
 def send_line_message(channel_access_token, user_id, message):
     url = "https://api.line.me/v2/bot/message/push"
@@ -308,7 +305,7 @@ if user["role"] == "會計":
                             merged_staff_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
                             save_data(merged_staff_df)
                             st.balloons()
-                            st.success(f"🎉 成功同步並永久寫入資料庫！已為 [{selected_clinic}] 新增 {len(new_nurses)} 位護理人員！")
+                            st.success(f"🎉 成功同步！已為 [{selected_clinic}] 新增 {len(new_nurses)} 位護理人員！")
                             st.rerun()
                     elif not extra_in_sys:
                         st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
@@ -342,7 +339,7 @@ if user["role"] == "會計":
         key=f"data_editor_{selected_clinic}"
     )
 
-    if st.button("💾 儲存並更新變更至資料庫"):
+    if st.button("💾 儲存並更新變更"):
         other_clinics_df = staff_df[staff_df['院所'] != selected_clinic]
         edited_df["本月離職"] = edited_df["本月離職"].fillna(False).astype(bool)
         edited_df["符合原因"] = edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
@@ -352,7 +349,7 @@ if user["role"] == "會計":
         
         new_staff_df = pd.concat([other_clinics_df, edited_df], ignore_index=True)
         save_data(new_staff_df)
-        st.success("✅ 修改內容與離職勾選紀錄已【永久寫入資料庫】！")
+        st.success("✅ 修改內容與離職勾選紀錄已成功儲存！")
         st.rerun()
 
     st.markdown("---")
@@ -447,7 +444,7 @@ else:
                     
                     import_mode = st.radio("選擇匯入方式：", ["增量比對更新（保留既有勾選資料，僅新增新到職人員）", "完全覆蓋資料庫（以新檔案為準重新建立全網母數）"])
                     
-                    if st.button("🚀 確認匯入此預審名單至資料庫"):
+                    if st.button("🚀 確認匯入此預審名單"):
                         new_records = []
                         for _, row in edited_preview_df.iterrows():
                             c_name = row['中文姓名']
@@ -475,7 +472,7 @@ else:
                         if import_mode.startswith("完全覆蓋"):
                             save_data(parsed_new_df)
                             st.balloons()
-                            st.success(f"🎉 成功覆蓋並寫入資料庫！已將 **{len(parsed_new_df)}** 位護理人員匯入！")
+                            st.success(f"🎉 成功覆蓋！已將 **{len(parsed_new_df)}** 位護理人員匯入！")
                         else:
                             existing_pairs = set(zip(staff_df['院所'], staff_df['姓名'])) if not staff_df.empty else set()
                             added_rows = []
@@ -487,7 +484,7 @@ else:
                                 merged_df = pd.concat([staff_df, pd.DataFrame(added_rows)], ignore_index=True)
                                 save_data(merged_df)
                                 st.balloons()
-                                st.success(f"🎉 增量更新成功並寫入資料庫！自動新增了 **{len(added_rows)}** 位護理人員！")
+                                st.success(f"🎉 增量更新成功！自動新增了 **{len(added_rows)}** 位護理人員！")
                             else:
                                 st.warning("⚠️ 檔案中的護理人員皆已存在於資料庫中。")
                         st.rerun()
@@ -604,7 +601,7 @@ else:
             key=f"hr_data_editor_{hr_view_clinic}"
         )
         
-        if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更至資料庫", key="hr_save_btn"):
+        if st.button(f"💾 儲存 [{hr_view_clinic}] 的人員變更", key="hr_save_btn"):
             other_clinics_df = staff_df[staff_df['院所'] != hr_view_clinic]
             hr_edited_df["本月離職"] = hr_edited_df["本月離職"].fillna(False).astype(bool)
             hr_edited_df["符合原因"] = hr_edited_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
@@ -614,7 +611,7 @@ else:
             
             new_staff_df = pd.concat([other_clinics_df, hr_edited_df], ignore_index=True)
             save_data(new_staff_df)
-            st.success(f"✅ 已成功更新 [{hr_view_clinic}] 人員資料並【永久寫入資料庫】！")
+            st.success(f"✅ 已成功更新 [{hr_view_clinic}] 人員資料！")
             st.rerun()
 
         with st.expander(f"🗑️ 批量移除/刪除 [{hr_view_clinic}] 已離職人員名單"):
