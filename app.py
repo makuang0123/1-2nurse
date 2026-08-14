@@ -564,6 +564,66 @@ else:
     else:
         nk4.error("🔴 下月預估：未達標！請留意薪資/人員調整")
 
+    # 🌟 管理者端【雙向交叉比對衛福部/健保署清冊】專區
+    st.markdown("---")
+    with st.expander(f"📄 上傳【{hr_view_clinic}】健保署/衛福部「醫事人員執業清冊 (.xls/.xlsx)」雙向對帳與比對", expanded=False):
+        st.write(f"上傳衛福部清冊後，系統會自動與【{hr_view_clinic}】現有母數進行【雙向比對】：")
+        hr_clinic_prsn_file = st.file_uploader(f"選擇 [{hr_view_clinic}] 執業清冊 (.xls / .xlsx)", type=["xls", "xlsx"], key="hr_clinic_prsn_uploader")
+        
+        if hr_clinic_prsn_file is not None:
+            try:
+                hr_uploaded_prsn_df = pd.read_excel(hr_clinic_prsn_file)
+                if '執業類別' in hr_uploaded_prsn_df.columns and '姓名' in hr_uploaded_prsn_df.columns:
+                    hr_nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
+                    
+                    hr_file_names = set(hr_nurses_in_file['姓名'].tolist())
+                    hr_sys_names = set(hr_clinic_all_df['姓名'].tolist()) if not hr_clinic_all_df.empty else set()
+                    
+                    hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in hr_sys_names else '🆕 新執登人員 (系統缺)')
+                    
+                    st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
+                    
+                    hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
+                    st.dataframe(hr_nurses_in_file[hr_display_cols], use_container_width=True)
+                    
+                    hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
+                    
+                    if hr_extra_in_sys:
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in hr_extra_in_sys]))
+
+                    hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
+                    
+                    if not hr_new_nurses.empty:
+                        st.warning(f"偵測到有 **{len(hr_new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
+                        if st.button(f"🚀 一鍵將 {len(hr_new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
+                            new_rows = []
+                            for _, row in hr_new_nurses.iterrows():
+                                arr_d = str(row.get('執業起日', ''))
+                                new_rows.append({
+                                    "區域": hr_view_region,
+                                    "院所": hr_view_clinic,
+                                    "姓名": row['姓名'],
+                                    "執業類別": row['執業類別'],
+                                    "身份": "舊有員工",
+                                    "到職日": arr_d,
+                                    "符合原因": "⚠️ 請選取原因",
+                                    "符合資格": "⚠️ 未選擇",
+                                    "本月離職": False,
+                                    "備註": "自衛福部清冊自動同步"
+                                })
+                            merged_staff_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
+                            save_data(merged_staff_df)
+                            st.balloons()
+                            st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(hr_new_nurses)} 位護理人員！")
+                            st.rerun()
+                    elif not hr_extra_in_sys:
+                        st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
+                else:
+                    st.error("❌ 檔案格式不符，請確認檔案包含「執業類別」與「姓名」欄位。")
+            except Exception as e:
+                st.error(f"檔案讀取失敗：{e}")
+
     hr_editable_df = staff_df[staff_df['院所'] == hr_view_clinic].copy() if not staff_df.empty else pd.DataFrame()
     
     if not hr_editable_df.empty:
@@ -631,7 +691,7 @@ else:
                         st.success(f"已成功新增 {hr_new_name}")
                         st.rerun()
     else:
-        st.info(f"💡 目前【{hr_view_clinic}】尚未建立人員名冊，可利用頁面上方方塊上傳全醫療網護理人員 Excel 母數總表。")
+        st.info(f"💡 目前【{hr_view_clinic}】尚未建立人員名冊，可利用上方按鈕上傳執業清冊或全醫療網護理人員 Excel 母數總表。")
 
     # 4. LINE 推播區
     st.markdown("---")
