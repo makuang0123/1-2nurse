@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為指定客製橘色系
+# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為指定客製配色
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,14 +97,14 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 指定客製橘色系提示框 (stAlert / st.info) */
+    /* 4. 🌟 指定客製配色提示框 (stAlert / st.info) */
     div[data-testid="stAlert"] {
         background-color: #fde9d2 !important;
         border: 1px solid #fed7aa !important;
-        border-left: 6px solid #eb612c !important;
+        border-left: 6px solid #FFCC99 !important;
         color: #422d13 !important;
         border-radius: 8px !important;
-        box-shadow: 0 3px 6px -1px rgba(235, 97, 44, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 3px 6px -1px rgba(255, 204, 153, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
     }
     div[data-testid="stAlert"] p {
         color: #422d13 !important;
@@ -677,7 +677,7 @@ else:
                     hr_nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
                     hr_file_names = set(hr_nurses_in_file['姓名'].tolist())
                     hr_sys_names = set(hr_clinic_all_df['姓名'].tolist()) if not hr_clinic_all_df.empty else set()
-                    hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in hr_sys_names else '🆕 新執登人員 (系統缺)')
+                    hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
                     
                     st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
                     hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
