@@ -15,11 +15,17 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：統一所有上傳與點選區域為 3D 立體色塊風格
+# 🌟 全局 CSS：互動區保留【海洋藍 3D】，其餘區塊改用【自然雅緻柔和色系】
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* 1. 所有操作按鈕 3D 立體化 */
+    /* 全站背景與文字舒適度優化 */
+    .stApp {
+        background-color: #fbfbf9;
+        color: #2c3e50;
+    }
+
+    /* 1. 所有可點選操作按鈕：海洋藍 3D 立體化 */
     div.stButton > button, div.stDownloadButton > button {
         background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
         color: #ffffff !important;
@@ -46,7 +52,7 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
     }
 
-    /* 2. 所有可展開上傳/面板 (Expander) 3D 立體卡片風格 */
+    /* 2. 所有可展開面板 (Expander)：海洋藍 3D 立體卡片風格 */
     div[data-testid="stExpander"] {
         border: none !important;
         margin-top: 8px !important;
@@ -77,7 +83,7 @@ st.markdown("""
         cursor: pointer !important;
     }
 
-    /* 3. 檔案上傳區塊 (File Uploader) 3D 浮雕風格 */
+    /* 3. 檔案上傳區塊 (File Uploader)：海洋藍 3D 浮雕風格 */
     div[data-testid="stFileUploader"] section {
         background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
         border: 2px dashed #60a5fa !important;
@@ -92,6 +98,15 @@ st.markdown("""
         border-radius: 6px !important;
         border-bottom: 3px solid #1e3a8a !important;
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
+    }
+
+    /* 4. 其餘指標與系統卡片：溫潤鼠尾草綠/燕麥灰柔和邊界 */
+    div[data-testid="stMetric"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        padding: 12px 16px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -468,11 +483,11 @@ else:
         mime="text/csv"
     )
 
-    # 🎨 區塊 1：上傳全醫療網清冊（藍色系色塊卡片）
+    # 🎨 區塊 1：上傳全醫療網清冊（自然雅緻 晨霧灰綠 色塊卡片）
     st.markdown("""
-        <div style="background-color: #f0f7ff; border: 1.5px solid #b8daff; border-radius: 10px; padding: 12px 18px 6px 18px; margin-bottom: 8px;">
-            <h4 style="color: #004085; margin: 0 0 4px 0;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
-            <p style="color: #495057; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
+        <div style="background: linear-gradient(135deg, #f4f7f4 0%, #edf2ee 100%); border: 1.5px solid #cbd5cb; border-radius: 10px; padding: 14px 20px 8px 20px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+            <h4 style="color: #2e4a36; margin: 0 0 4px 0; font-weight: 700;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
+            <p style="color: #556b5a; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -533,7 +548,7 @@ else:
                                 "區域": region_name,
                                 "院所": clinic_name,
                                 "姓名": c_name,
-                                "執業類別": title,
+                                "職類別": title,
                                 "身份": "舊有員工",
                                 "到職日": arr_date,
                                 "符合原因": "⚠️ 請選取原因",
@@ -568,11 +583,11 @@ else:
             except Exception as e:
                 st.error(f"檔案讀取失敗：{e}")
 
-    # 🎨 區塊 2：各院離職人員通報名冊（橘黃色系色塊卡片）
+    # 🎨 區塊 2：各院離職人員通報名冊（溫暖柔和 麥芽杏色 色塊卡片）
     st.markdown("""
-        <div style="background-color: #fff9e6; border: 1.5px solid #ffeeba; border-radius: 10px; padding: 12px 18px 6px 18px; margin-top: 15px; margin-bottom: 8px;">
-            <h4 style="color: #856404; margin: 0 0 4px 0;">📌 2. 本月各院離職人員通報名冊（支援即時對照圖片與一鍵標記）</h4>
-            <p style="color: #533f03; font-size: 14px; margin-bottom: 8px;">針對最新各院離職申請通報，系統已自動過濾出<b>護理同仁</b>，支援快速比對與一鍵勾選離職/填寫備註。</p>
+        <div style="background: linear-gradient(135deg, #fdf8f2 0%, #faf1e6 100%); border: 1.5px solid #e8d7c3; border-radius: 10px; padding: 14px 20px 8px 20px; margin-top: 15px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+            <h4 style="color: #784a20; margin: 0 0 4px 0; font-weight: 700;">📌 2. 本月各院離職人員通報名冊（支援即時對照圖片與一鍵標記）</h4>
+            <p style="color: #7a5e45; font-size: 14px; margin-bottom: 8px;">針對最新各院離職申請通報，系統已自動過濾出<b>護理同仁</b>，支援快速比對與一鍵勾選離職/填寫備註。</p>
         </div>
     """, unsafe_allow_html=True)
 
