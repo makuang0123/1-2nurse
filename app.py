@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：僅針對 st.info 改為純白底與橘色強調條，保留 st.error / st.success 原生顏色
+# 🌟 全局 CSS：精準覆蓋 st.info (純白底、橘色邊條、深褐字)，保留 st.error / st.success 原生顏色
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,8 +97,8 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 僅對 st.info 生效：純白底 #FFFFFF、橘色左邊條 #eb612c、文字 #422d13 */
-    div[data-testid="stAlert"]:has(svg[data-testid="stNotificationIconInfo"]) {
+    /* 4. 🌟 st.info 專屬樣式：純白底 #FFFFFF、橘色左邊條 #eb612c、文字 #422d13 */
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) {
         background: #ffffff !important;
         background-color: #ffffff !important;
         border: 1px solid #fed7aa !important;
@@ -107,7 +107,7 @@ st.markdown("""
         border-radius: 6px !important;
         box-shadow: none !important;
     }
-    div[data-testid="stAlert"]:has(svg[data-testid="stNotificationIconInfo"]) p {
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) p {
         color: #422d13 !important;
         font-weight: 600 !important;
     }
@@ -612,9 +612,9 @@ else:
 
         next_df = c_all_df[c_all_df['本月離職'] == False] if cur_tot > 0 else pd.DataFrame()
         next_tot = len(next_df)
-        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_total > 0 else 0
-        next_req = math.ceil(next_tot / 2) if next_tot > 0 else 0
-        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_tot > 0) else ("⚪ 無資料" if next_tot == 0 else "🔴 預估未達標")
+        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
+        next_req = math.ceil(next_total / 2) if next_total > 0 else 0
+        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_total > 0) else ("⚪ 無資料" if next_total == 0 else "🔴 預估未達標")
         
         summary_list.append({
             "區域": c_region, "院所名稱": c, "本月人數": cur_tot, "本月合規": cur_comp, "本月門檻": cur_req,
@@ -686,8 +686,8 @@ else:
                     
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
-                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
-                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in hr_extra_in_sys]))
 
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     if not hr_new_nurses.empty:
