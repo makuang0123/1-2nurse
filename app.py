@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區採用高雅冷霧灰白，襯托海洋藍按鈕
+# 🌟 全局 CSS：展開面板與上傳區採用高雅冷霧灰白，提示框為顯眼金盞花琥珀金
 # -------------------------------------------------------------------
 st.markdown(
     """
@@ -104,18 +104,18 @@ st.markdown(
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 溫潤米杏提示框 */
+    /* 4. 🌟 顯眼金盞花琥珀金提示框 (stAlert / st.info) */
     div[data-testid="stAlert"] {
-        background: linear-gradient(135deg, #fdfbf7 0%, #f7f3eb 100%) !important;
-        border: 1px solid #e5dec9 !important;
-        border-left: 5px solid #bda87f !important;
-        color: #5c4d3c !important;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+        border: 1px solid #fde68a !important;
+        border-left: 6px solid #d97706 !important;
+        color: #78350f !important;
         border-radius: 8px !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+        box-shadow: 0 3px 6px -1px rgba(217, 119, 6, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
     }
     div[data-testid="stAlert"] p {
-        color: #5c4d3c !important;
-        font-weight: 500 !important;
+        color: #78350f !important;
+        font-weight: 600 !important;
     }
 
     /* 5. 指標卡片 */
@@ -492,7 +492,6 @@ if not st.session_state.logged_in:
 user = st.session_state.user_info
 allowed_clinics = user.get("clinics", [])
 
-# 🌟 區分管理者與會計端登入資訊顯示
 if user["role"] == "HR總管理者":
   st.sidebar.success(f"👤 歡迎登入：{user['name']}（HR總管理員）")
 else:
@@ -872,12 +871,12 @@ else:
       mime="text/csv",
   )
 
-  # 區塊 1：上傳全醫療網清冊（冷霧灰白面板）
+  # 🎨 區塊 1：上傳全醫療網清冊（溫暖柔和麥芽杏色）
   st.markdown(
       """
-        <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 20px 8px 20px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
-            <h4 style="color: #1e293b; margin: 0 0 4px 0; font-weight: 700;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
-            <p style="color: #475569; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
+        <div style="background: linear-gradient(135deg, #fdf8f2 0%, #faf1e6 100%); border: 1.5px solid #e8d7c3; border-radius: 10px; padding: 14px 20px 8px 20px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
+            <h4 style="color: #784a20; margin: 0 0 4px 0; font-weight: 700;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
+            <p style="color: #7a5e45; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
         </div>
     """,
       unsafe_allow_html=True,
@@ -1034,7 +1033,7 @@ else:
       except Exception as e:
         st.error(f"檔案讀取失敗：{e}")
 
-  # 區塊 2：各院離職人員通報名冊（溫暖柔和麥芽杏色）
+  # 🎨 區塊 2：各院離職人員通報名冊（溫暖柔和麥芽杏色）
   st.markdown(
       """
         <div style="background: linear-gradient(135deg, #fdf8f2 0%, #faf1e6 100%); border: 1.5px solid #e8d7c3; border-radius: 10px; padding: 14px 20px 8px 20px; margin-top: 15px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);">
@@ -1240,9 +1239,9 @@ else:
   ck2.metric("本月符合資格人數", f"{hr_cur_comp} 人")
   ck3.metric("本月標準門檻 (1/2)", f"{hr_cur_req} 人")
   if hr_cur_passed:
-    ck4.success("🟢 本月現況：符合規定")
+    c4.success("🟢 本月現況：符合規定")
   else:
-    ck4.error("🔴 本月現況：未達標！")
+    c4.error("🔴 本月現況：未達標！")
 
   st.markdown(
       "##### 🔮 **【2. 下月預估卡控】（已自動扣除勾選「本月離職」人員）**"
@@ -1309,7 +1308,7 @@ else:
               else set()
           )
 
-          hr_nurses_in_file["比對狀態"] = hr_nurses_in_file["姓名"].apply(
+          nurses_in_file["比對狀態"] = nurses_in_file["姓名"].apply(
               lambda x: (
                   "✅ 已在名冊中"
                   if x in hr_sys_names
@@ -1385,7 +1384,7 @@ else:
                   f" {len(hr_new_nurses)} 位護理人員！"
               )
               st.rerun()
-          elif not hr_extra_in_sys:
+          elif not extra_in_sys:
             st.success(
                 "🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！"
             )
