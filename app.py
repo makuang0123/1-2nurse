@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為質感【淺橘色】
+# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為指定客製橘色系
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,17 +97,17 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 質感【淺橘色】提示框 (stAlert / st.info) */
+    /* 4. 🌟 指定客製橘色系提示框 (stAlert / st.info) */
     div[data-testid="stAlert"] {
-        background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%) !important;
+        background-color: #fde9d2 !important;
         border: 1px solid #fed7aa !important;
-        border-left: 6px solid #f97316 !important;
-        color: #9a3412 !important;
+        border-left: 6px solid #eb612c !important;
+        color: #422d13 !important;
         border-radius: 8px !important;
-        box-shadow: 0 3px 6px -1px rgba(249, 115, 22, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 3px 6px -1px rgba(235, 97, 44, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
     }
     div[data-testid="stAlert"] p {
-        color: #9a3412 !important;
+        color: #422d13 !important;
         font-weight: 600 !important;
     }
 
@@ -686,7 +686,7 @@ else:
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
                         st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
-                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in hr_extra_in_sys]))
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
 
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     if not hr_new_nurses.empty:
