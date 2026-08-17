@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，僅針對 st.info 改色，保留 st.error 原生紅色
+# 🌟 全局 CSS：按鈕 3D 海洋藍、展開面板冷霧灰白、st.info 純白底橘邊條、保留原生紅綠框
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,17 +97,20 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 僅對 st.info 生效（白底、橘色邊條、深褐字），不影響原生的 st.error / st.success / st.warning */
-    div[data-testid="stAlert"]:has(svg[data-testid="stNotificationIconInfo"]) {
-        background: #ffffff !important;
+    /* 4. 🌟 僅對 st.info 生效：純白底 #FFFFFF、橘色左邊條 #eb612c、文字 #422d13 */
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) {
         background-color: #ffffff !important;
+        background: #ffffff !important;
         border: 1px solid #fed7aa !important;
         border-left: 6px solid #eb612c !important;
-        color: #422d13 !important;
         border-radius: 6px !important;
         box-shadow: none !important;
     }
-    div[data-testid="stAlert"]:has(svg[data-testid="stNotificationIconInfo"]) p {
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) * {
+        color: #422d13 !important;
+        background-color: transparent !important;
+    }
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) p {
         color: #422d13 !important;
         font-weight: 600 !important;
     }
@@ -156,9 +159,22 @@ def normalize_clinic_name(location_str):
             return clinic
     return "博愛院"
 
+# -------------------------------------------------------------------
+# 📊 雲端資料庫/Google Sheets 讀寫機制（防止資料重置歸零）
+# -------------------------------------------------------------------
 DB_URL = st.secrets.get("DB_URL", "sqlite:///local_test.db")
 
 def load_staff_data():
+    # 優先嘗試透過 Google Sheets 連線讀取
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(worksheet="staff", ttl=0)
+        if df is not None and not df.empty:
+            return df
+    except Exception:
+        pass
+    
+    # 其次嘗試 SQLAlchemy
     if HAS_SQLALCHEMY:
         try:
             eng = create_engine(DB_URL)
@@ -167,7 +183,29 @@ def load_staff_data():
                 return df
         except Exception:
             pass
+            
     return pd.DataFrame(columns=["區域", "院所", "姓名", "執業類別", "身份", "到職日", "符合原因", "符合資格", "本月離職", "備註"])
+
+def save_data(new_df):
+    new_df["本月離職"] = new_df["本月離職"].fillna(False).astype(bool)
+    new_df["符合原因"] = new_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
+    new_df["符合資格"] = new_df["符合原因"].map(get_compliance_status)
+    st.session_state.db_staff = new_df.copy()
+    
+    # 嘗試同步寫入 Google Sheets
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        conn.update(worksheet="staff", data=new_df)
+    except Exception:
+        pass
+
+    # 同時寫入本地資料庫作備份
+    if HAS_SQLALCHEMY:
+        try:
+            eng = create_engine(DB_URL)
+            new_df.to_sql("staff", eng, if_exists="replace", index=False)
+        except Exception:
+            pass
 
 if 'db_staff' not in st.session_state:
     st.session_state.db_staff = load_staff_data()
@@ -260,18 +298,6 @@ if st.sidebar.button("🚪 登出系統"):
     st.session_state.logged_in = False
     st.session_state.user_info = None
     st.rerun()
-
-def save_data(new_df):
-    new_df["本月離職"] = new_df["本月離職"].fillna(False).astype(bool)
-    new_df["符合原因"] = new_df["符合原因"].fillna("⚠️ 請選取原因").replace({"": "⚠️ 請選取原因"})
-    new_df["符合資格"] = new_df["符合原因"].map(get_compliance_status)
-    st.session_state.db_staff = new_df.copy()
-    if HAS_SQLALCHEMY:
-        try:
-            eng = create_engine(DB_URL)
-            new_df.to_sql("staff", eng, if_exists="replace", index=False)
-        except Exception:
-            pass
 
 def send_line_message(channel_access_token, user_id, message):
     url = "https://api.line.me/v2/bot/message/push"
@@ -537,7 +563,7 @@ else:
                                 st.warning("⚠️ 檔案中的護理人員皆已存在於資料庫中。")
                         st.rerun()
                 else:
-                    st.error("❌ 檔案欄位格式不符，請確認包含「中文姓名」與「上班地點」欄位。")
+                    st.error("❌ 檔案欄位格式不符，請確認檔案包含「中文姓名」與「上班地點」欄位。")
             except Exception as e:
                 st.error(f"檔案讀取失敗：{e}")
 
@@ -612,9 +638,9 @@ else:
 
         next_df = c_all_df[c_all_df['本月離職'] == False] if cur_tot > 0 else pd.DataFrame()
         next_tot = len(next_df)
-        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
-        next_req = math.ceil(next_tot / 2) if next_tot > 0 else 0
-        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_tot > 0) else ("⚪ 無資料" if next_tot == 0 else "🔴 預估未達標")
+        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_total > 0 else 0
+        next_req = math.ceil(next_total / 2) if next_total > 0 else 0
+        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_total > 0) else ("⚪ 無資料" if next_total == 0 else "🔴 預估未達標")
         
         summary_list.append({
             "區域": c_region, "院所名稱": c, "本月人數": cur_tot, "本月合規": cur_comp, "本月門檻": cur_req,
@@ -678,21 +704,21 @@ else:
                     hr_nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
                     hr_file_names = set(hr_nurses_in_file['姓名'].tolist())
                     hr_sys_names = set(hr_clinic_all_df['姓名'].tolist()) if not hr_clinic_all_df.empty else set()
-                    hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
+                    hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in hr_sys_names else '🆕 新執登人員 (系統缺)')
                     
                     st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
                     hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
-                    st.dataframe(hr_nurses_in_file[display_cols], use_container_width=True)
+                    st.dataframe(hr_nurses_in_file[hr_display_cols], use_container_width=True)
                     
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
-                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
-                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in hr_extra_in_sys]))
 
-                    hr_new_nurses = hr_nurses_in_file[hr_new_nurses['比對狀態'] == '🆕 新執登人員 (系統缺)']
+                    hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     if not hr_new_nurses.empty:
                         st.warning(f"偵測到有 **{len(hr_new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
-                        if st.button(f"🚀 一鍵將 {len(new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
+                        if st.button(f"🚀 一鍵將 {len(hr_new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
                             new_rows = []
                             for _, row in hr_new_nurses.iterrows():
                                 arr_d = str(row.get('執業起日', ''))
@@ -704,9 +730,9 @@ else:
                             merged_staff_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
                             save_data(merged_staff_df)
                             st.balloons()
-                            st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(new_nurses)} 位護理人員！")
+                            st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(hr_new_nurses)} 位護理人員！")
                             st.rerun()
-                    elif not extra_in_sys:
+                    elif not hr_extra_in_sys:
                         st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
                 else:
                     st.error("❌ 檔案格式不符，請確認檔案包含「執業類別」與「姓名」欄位。")
