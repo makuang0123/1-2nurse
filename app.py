@@ -386,65 +386,16 @@ else:
         mime="text/csv"
     )
 
-    # 🌟【新增】離職同仁通報與自動標記區塊
-    with st.expander("📌 本月各院離職人員通報名冊（支援即時對照圖片與一鍵標記）", expanded=True):
-        st.write("以下為最新離職通報名單，系統已自動篩選出屬於**護理人員**的同仁：")
-        
-        col_res_img, col_res_tbl = st.columns([1, 1.2])
-        with col_res_img:
-            st.markdown("🖼️ **離職通報原圖上傳/參考：**")
-            res_img_file = st.file_uploader("可上傳最新離職通報截圖 (.jpg / .png)", type=["jpg", "png", "jpeg"], key="res_img_uploader")
-            if res_img_file is not None:
-                st.image(res_img_file, caption="最新離職人員通報清單", use_container_width=True)
-            else:
-                st.info("💡 提示：可上傳離職截圖對照，或直接參考右側自動整理之清單。")
-        
-        with col_res_tbl:
-            st.markdown("📋 **護理離職同仁一覽表：**")
-            resigned_nurses_data = [
-                {"院所": "明華院", "姓名": "魏禎", "職稱": "護理人員", "到職日": "2026/5/4", "離職日": "2026/8/11", "處理狀態": "待標記"}
-            ]
-            
-            # 檢查是否已被標記
-            if not staff_df.empty:
-                for item in resigned_nurses_data:
-                    match_row = staff_df[(staff_df['院所'] == item['院所']) & (staff_df['姓名'] == item['姓名'])]
-                    if not match_row.empty and match_row.iloc[0]['本月離職']:
-                        item['處理狀態'] = "✅ 已標記離職"
-            
-            res_df_display = pd.DataFrame(resigned_nurses_data)
-            st.dataframe(res_df_display, use_container_width=True)
-            
-            if st.button("⚡ 一鍵為上述護理同仁「勾選本月離職並寫入備註離職日」"):
-                updated_count = 0
-                if not staff_df.empty:
-                    for item in resigned_nurses_data:
-                        mask = (staff_df['院所'] == item['院所']) & (staff_df['姓名'] == item['姓名'])
-                        if mask.any():
-                            staff_df.loc[mask, '本月離職'] = True
-                            current_memo = str(staff_df.loc[mask, '備註'].values[0])
-                            date_str = f"離職日：{item['離職日']}"
-                            if date_str not in current_memo:
-                                new_memo = f"{current_memo} {date_str}".strip()
-                                staff_df.loc[mask, '備註'] = new_memo
-                            updated_count += 1
-                    
-                    if updated_count > 0:
-                        save_data(staff_df)
-                        st.balloons()
-                        st.success(f"🎉 成功為 {updated_count} 位護理同仁勾選離職並於備註填寫離職日期！")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ 系統名冊中尚未找到對應人員，請確認是否已匯入該院人員母數。")
-                else:
-                    st.warning("⚠️ 目前資料庫為空，請先匯入人員母數。")
-
-    st.markdown("---")
-
-    with st.expander("📄 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審", expanded=False):
-        st.write("上傳包含欄位：`員工編號`、`中文姓名`、`職稱`、`上班地點`、`到職日` 的總表：")
-        
-        prsn_file = st.file_uploader("選擇全網護理人員 Excel 檔案 (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"])
+    # 🎨 區塊 1：上傳全醫療網清冊（藍色系色塊卡片）
+    st.markdown("""
+        <div style="background-color: #f0f7ff; border: 1.5px solid #b8daff; border-radius: 10px; padding: 12px 18px 6px 18px; margin-bottom: 15px;">
+            <h4 style="color: #004085; margin: 0 0 4px 0;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
+            <p style="color: #495057; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    with st.expander("展開母數清冊上傳面板", expanded=False):
+        prsn_file = st.file_uploader("選擇全網護理人員 Excel 檔案 (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="master_prsn_uploader")
         
         if prsn_file is not None:
             try:
@@ -473,7 +424,7 @@ else:
                             "職稱": st.column_config.TextColumn("職稱"),
                             "到職日": st.column_config.TextColumn("到職日"),
                             "上班地點": st.column_config.TextColumn("原始上班地點", disabled=True),
-                            "歸類院": st.column_config.SelectboxColumn("歸院 (可手動修正)", options=ALL_CLINICS, required=True),
+                            "歸類院": st.column_config.SelectboxColumn("歸類院 (可手動修正)", options=ALL_CLINICS, required=True),
                             "歸類區域": st.column_config.TextColumn("歸類區域 (自動對應)", disabled=True),
                             "備註": st.column_config.TextColumn("備註"),
                         },
@@ -534,6 +485,64 @@ else:
                     st.error("❌ 檔案欄位格式不符，請確認包含「中文姓名」與「上班地點」欄位。")
             except Exception as e:
                 st.error(f"檔案讀取失敗：{e}")
+
+    # 🎨 區塊 2：各院離職人員通報名冊（橘黃色系色塊卡片）
+    st.markdown("""
+        <div style="background-color: #fff9e6; border: 1.5px solid #ffeeba; border-radius: 10px; padding: 12px 18px 6px 18px; margin-top: 15px; margin-bottom: 15px;">
+            <h4 style="color: #856404; margin: 0 0 4px 0;">📌 2. 本月各院離職人員通報名冊（支援即時對照圖片與一鍵標記）</h4>
+            <p style="color: #533f03; font-size: 14px; margin-bottom: 8px;">針對最新各院離職申請通報，系統已自動過濾出<b>護理同仁</b>，支援快速比對與一鍵勾選離職/填寫備註。</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("展開離職同仁名冊與一鍵標記面板", expanded=True):
+        col_res_img, col_res_tbl = st.columns([1, 1.2])
+        with col_res_img:
+            st.markdown("🖼️ **離職通報原圖上傳/參考：**")
+            res_img_file = st.file_uploader("可上傳最新離職通報截圖 (.jpg / .png)", type=["jpg", "png", "jpeg"], key="res_img_uploader")
+            if res_img_file is not None:
+                st.image(res_img_file, caption="最新離職人員通報清單", use_container_width=True)
+            else:
+                st.info("💡 提示：可上傳離職截圖對照，或直接參考右側自動整理之清單。")
+        
+        with col_res_tbl:
+            st.markdown("📋 **護理離職同仁一覽表：**")
+            resigned_nurses_data = [
+                {"院所": "明華院", "姓名": "魏禎", "職稱": "護理人員", "到職日": "2026/5/4", "離職日": "2026/8/11", "處理狀態": "待標記"}
+            ]
+            
+            # 檢查是否已被標記
+            if not staff_df.empty:
+                for item in resigned_nurses_data:
+                    match_row = staff_df[(staff_df['院所'] == item['院所']) & (staff_df['姓名'] == item['姓名'])]
+                    if not match_row.empty and match_row.iloc[0]['本月離職']:
+                        item['處理狀態'] = "✅ 已標記離職"
+            
+            res_df_display = pd.DataFrame(resigned_nurses_data)
+            st.dataframe(res_df_display, use_container_width=True)
+            
+            if st.button("⚡ 一鍵為上述護理同仁「勾選本月離職並寫入備註離職日」"):
+                updated_count = 0
+                if not staff_df.empty:
+                    for item in resigned_nurses_data:
+                        mask = (staff_df['院所'] == item['院所']) & (staff_df['姓名'] == item['姓名'])
+                        if mask.any():
+                            staff_df.loc[mask, '本月離職'] = True
+                            current_memo = str(staff_df.loc[mask, '備註'].values[0])
+                            date_str = f"離職日：{item['離職日']}"
+                            if date_str not in current_memo:
+                                new_memo = f"{current_memo} {date_str}".strip()
+                                staff_df.loc[mask, '備註'] = new_memo
+                            updated_count += 1
+                    
+                    if updated_count > 0:
+                        save_data(staff_df)
+                        st.balloons()
+                        st.success(f"🎉 成功為 {updated_count} 位護理同仁勾選離職並於備註填寫離職日期！")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ 系統名冊中尚未找到對應人員，請確認是否已匯入該院人員母數。")
+                else:
+                    st.warning("⚠️ 目前資料庫為空，請先匯入人員母數。")
 
     st.markdown("---")
 
@@ -650,7 +659,7 @@ else:
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     
                     if not hr_new_nurses.empty:
-                        st.warning(f"偵測到有 **{len(hr_new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
+                        st.warning(f"偵測到有 **{len(new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
                         if st.button(f"🚀 一鍵將 {len(hr_new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
                             new_rows = []
                             for _, row in hr_new_nurses.iterrows():
