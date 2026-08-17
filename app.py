@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為指定純色（無漸層、無加深）
+# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為純白底與橘色強調條
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,11 +97,11 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 指定純色提示框（背景 #FFCC99、邊條 #eb612c、文字 #422d13，無漸層、無加深、無陰影） */
+    /* 4. 🌟 指定純白底提示框（背景 #FFFFFF、邊條 #eb612c、文字 #422d13，無漸層、無加深） */
     div[data-testid="stAlert"] {
-        background: #FFCC99 !important;
-        background-color: #FFCC99 !important;
-        border: 1px solid #f8b878 !important;
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        border: 1px solid #fed7aa !important;
         border-left: 6px solid #eb612c !important;
         color: #422d13 !important;
         border-radius: 6px !important;
@@ -675,18 +675,18 @@ else:
             try:
                 hr_uploaded_prsn_df = pd.read_excel(hr_clinic_prsn_file)
                 if '執業類別' in hr_uploaded_prsn_df.columns and '姓名' in hr_uploaded_prsn_df.columns:
-                    hr_nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
-                    hr_file_names = set(hr_nurses_in_file['姓名'].tolist())
+                    nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
+                    hr_file_names = set(nurses_in_file['姓名'].tolist())
                     hr_sys_names = set(hr_clinic_all_df['姓名'].tolist()) if not hr_clinic_all_df.empty else set()
                     hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
                     
-                    st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
+                    st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。清冊比對明細：")
                     hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
                     st.dataframe(hr_nurses_in_file[display_cols], use_container_width=True)
                     
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
-                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
                         st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
 
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
