@@ -12,6 +12,9 @@ except ImportError:
 
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
+# -------------------------------------------------------------------
+# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為質感【淺橘色】
+# -------------------------------------------------------------------
 st.markdown("""
 <style>
     .stApp {
@@ -19,6 +22,7 @@ st.markdown("""
         color: #1e293b;
     }
 
+    /* 1. 操作按鈕：海洋藍 3D 立體化 */
     div.stButton > button, div.stDownloadButton > button {
         background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
         color: #ffffff !important;
@@ -45,6 +49,7 @@ st.markdown("""
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
     }
 
+    /* 2. 展開面板 (Expander)：高雅冷霧灰白 3D 浮雕風格 */
     div[data-testid="stExpander"] {
         border: none !important;
         margin-top: 8px !important;
@@ -75,6 +80,7 @@ st.markdown("""
         cursor: pointer !important;
     }
 
+    /* 3. 檔案上傳框 (File Uploader)：冷霧灰白與質感深灰邊線 */
     div[data-testid="stFileUploader"] section {
         background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
         border: 2px dashed #cbd5e1 !important;
@@ -91,19 +97,21 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
+    /* 4. 🌟 質感【淺橘色】提示框 (stAlert / st.info) */
     div[data-testid="stAlert"] {
-        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
-        border: 1px solid #bbf7d0 !important;
-        border-left: 6px solid #16a34a !important;
-        color: #14532d !important;
+        background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%) !important;
+        border: 1px solid #fed7aa !important;
+        border-left: 6px solid #f97316 !important;
+        color: #9a3412 !important;
         border-radius: 8px !important;
-        box-shadow: 0 3px 6px -1px rgba(22, 163, 74, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 3px 6px -1px rgba(249, 115, 22, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.04) !important;
     }
     div[data-testid="stAlert"] p {
-        color: #14532d !important;
+        color: #9a3412 !important;
         font-weight: 600 !important;
     }
 
+    /* 5. 指標卡片 */
     div[data-testid="stMetric"] {
         background: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
@@ -673,7 +681,7 @@ else:
                     
                     st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
                     hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
-                    st.dataframe(hr_nurses_in_file[hr_display_cols], use_container_width=True)
+                    st.dataframe(hr_nurses_in_file[display_cols], use_container_width=True)
                     
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
@@ -697,7 +705,7 @@ else:
                             st.balloons()
                             st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(hr_new_nurses)} 位護理人員！")
                             st.rerun()
-                    elif not hr_extra_in_sys:
+                    elif not extra_in_sys:
                         st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
                 else:
                     st.error("❌ 檔案格式不符，請確認檔案包含「執業類別」與「姓名」欄位。")
