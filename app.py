@@ -14,6 +14,88 @@ except ImportError:
 # 頁面標題與配置
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
+# -------------------------------------------------------------------
+# 🌟 全局 CSS：統一所有上傳與點選區域為 3D 立體色塊風格
+# -------------------------------------------------------------------
+st.markdown("""
+<style>
+    /* 1. 所有操作按鈕 3D 立體化 */
+    div.stButton > button, div.stDownloadButton > button {
+        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border-radius: 8px !important;
+        border: 1px solid #1e40af !important;
+        border-bottom: 4px solid #172554 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.1s ease-in-out !important;
+        padding: 8px 20px !important;
+        cursor: pointer !important;
+    }
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
+        background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%) !important;
+        color: #ffffff !important;
+        border-bottom: 4px solid #172554 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.3) !important;
+    }
+    div.stButton > button:active, div.stDownloadButton > button:active {
+        transform: translateY(2px) !important;
+        border-bottom: 1px solid #172554 !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* 2. 所有可展開上傳/面板 (Expander) 3D 立體卡片風格 */
+    div[data-testid="stExpander"] {
+        border: none !important;
+        margin-top: 8px !important;
+        margin-bottom: 14px !important;
+    }
+    div[data-testid="stExpander"] details {
+        border-radius: 10px !important;
+        border: 1px solid #bfdbfe !important;
+        background: #ffffff !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stExpander"] summary {
+        background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+        color: #1e3a8a !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        border-bottom: 3px solid #93c5fd !important;
+        padding: 12px 18px !important;
+        border-radius: 9px !important;
+        transition: all 0.15s ease !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04) !important;
+    }
+    div[data-testid="stExpander"] summary:hover {
+        background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%) !important;
+        color: #172554 !important;
+        border-bottom: 3px solid #60a5fa !important;
+        cursor: pointer !important;
+    }
+
+    /* 3. 檔案上傳區塊 (File Uploader) 3D 浮雕風格 */
+    div[data-testid="stFileUploader"] section {
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+        border: 2px dashed #60a5fa !important;
+        border-radius: 10px !important;
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0,0,0,0.04) !important;
+        padding: 16px !important;
+    }
+    div[data-testid="stFileUploader"] section button {
+        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        border-bottom: 3px solid #1e3a8a !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🩺 醫療網護理人員投保級距與執登管控系統")
 
 # -------------------------------------------------------------------
@@ -388,13 +470,13 @@ else:
 
     # 🎨 區塊 1：上傳全醫療網清冊（藍色系色塊卡片）
     st.markdown("""
-        <div style="background-color: #f0f7ff; border: 1.5px solid #b8daff; border-radius: 10px; padding: 12px 18px 6px 18px; margin-bottom: 15px;">
+        <div style="background-color: #f0f7ff; border: 1.5px solid #b8daff; border-radius: 10px; padding: 12px 18px 6px 18px; margin-bottom: 8px;">
             <h4 style="color: #004085; margin: 0 0 4px 0;">📄 1. 上傳全醫療網「護理人員母數清冊 (.xlsx / .xls / .csv)」全自動分類與預審</h4>
             <p style="color: #495057; font-size: 14px; margin-bottom: 8px;">上傳包含欄位：<code>員工編號</code>、<code>中文姓名</code>、<code>職稱</code>、<code>上班地點</code>、<code>到職日</code> 的總表以建立母數基礎。</p>
         </div>
     """, unsafe_allow_html=True)
     
-    with st.expander("展開母數清冊上傳面板", expanded=False):
+    with st.expander("📂 展開母數清冊上傳與預審面板", expanded=False):
         prsn_file = st.file_uploader("選擇全網護理人員 Excel 檔案 (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="master_prsn_uploader")
         
         if prsn_file is not None:
@@ -488,13 +570,13 @@ else:
 
     # 🎨 區塊 2：各院離職人員通報名冊（橘黃色系色塊卡片）
     st.markdown("""
-        <div style="background-color: #fff9e6; border: 1.5px solid #ffeeba; border-radius: 10px; padding: 12px 18px 6px 18px; margin-top: 15px; margin-bottom: 15px;">
+        <div style="background-color: #fff9e6; border: 1.5px solid #ffeeba; border-radius: 10px; padding: 12px 18px 6px 18px; margin-top: 15px; margin-bottom: 8px;">
             <h4 style="color: #856404; margin: 0 0 4px 0;">📌 2. 本月各院離職人員通報名冊（支援即時對照圖片與一鍵標記）</h4>
             <p style="color: #533f03; font-size: 14px; margin-bottom: 8px;">針對最新各院離職申請通報，系統已自動過濾出<b>護理同仁</b>，支援快速比對與一鍵勾選離職/填寫備註。</p>
         </div>
     """, unsafe_allow_html=True)
 
-    with st.expander("展開離職同仁名冊與一鍵標記面板", expanded=True):
+    with st.expander("📋 展開離職同仁名冊與一鍵標記面板", expanded=True):
         col_res_img, col_res_tbl = st.columns([1, 1.2])
         with col_res_img:
             st.markdown("🖼️ **離職通報原圖上傳/參考：**")
@@ -510,7 +592,6 @@ else:
                 {"院所": "明華院", "姓名": "魏禎", "職稱": "護理人員", "到職日": "2026/5/4", "離職日": "2026/8/11", "處理狀態": "待標記"}
             ]
             
-            # 檢查是否已被標記
             if not staff_df.empty:
                 for item in resigned_nurses_data:
                     match_row = staff_df[(staff_df['院所'] == item['院所']) & (staff_df['姓名'] == item['姓名'])]
@@ -659,7 +740,7 @@ else:
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     
                     if not hr_new_nurses.empty:
-                        st.warning(f"偵測到有 **{len(new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
+                        st.warning(f"偵測到有 **{len(hr_new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
                         if st.button(f"🚀 一鍵將 {len(hr_new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
                             new_rows = []
                             for _, row in hr_new_nurses.iterrows():
