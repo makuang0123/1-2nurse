@@ -634,9 +634,9 @@ else:
 
         next_df = c_all_df[c_all_df['本月離職'] == False] if cur_tot > 0 else pd.DataFrame()
         next_tot = len(next_df)
-        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_total > 0 else 0
-        next_req = math.ceil(next_total / 2) if next_total > 0 else 0
-        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_total > 0) else ("⚪ 無資料" if next_total == 0 else "🔴 預估未達標")
+        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
+        next_req = math.ceil(next_tot / 2) if next_tot > 0 else 0
+        next_stat = "🟢 預估達標" if (next_comp >= next_req and next_tot > 0) else ("⚪ 無資料" if next_tot == 0 else "🔴 預估未達標")
         
         summary_list.append({
             "區域": c_region, "院所名稱": c, "本月人數": cur_tot, "本月合規": cur_comp, "本月門檻": cur_req,
@@ -709,7 +709,7 @@ else:
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
                         st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
-                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in hr_extra_in_sys]))
+                        st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
 
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     if not hr_new_nurses.empty:
