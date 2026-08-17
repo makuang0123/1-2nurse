@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：按鈕 3D 海洋藍、展開面板冷霧灰白、st.info 純白底橘邊條、保留原生紅綠框
+# 🌟 全局 CSS：精準覆蓋 st.info (純白底、橘色邊條、深褐字)，保留 st.error 原生紅色
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -165,7 +165,6 @@ def normalize_clinic_name(location_str):
 DB_URL = st.secrets.get("DB_URL", "sqlite:///local_test.db")
 
 def load_staff_data():
-    # 優先嘗試透過 Google Sheets 連線讀取
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet="staff", ttl=0)
@@ -174,7 +173,6 @@ def load_staff_data():
     except Exception:
         pass
     
-    # 其次嘗試 SQLAlchemy
     if HAS_SQLALCHEMY:
         try:
             eng = create_engine(DB_URL)
@@ -192,14 +190,12 @@ def save_data(new_df):
     new_df["符合資格"] = new_df["符合原因"].map(get_compliance_status)
     st.session_state.db_staff = new_df.copy()
     
-    # 嘗試同步寫入 Google Sheets
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         conn.update(worksheet="staff", data=new_df)
     except Exception:
         pass
 
-    # 同時寫入本地資料庫作備份
     if HAS_SQLALCHEMY:
         try:
             eng = create_engine(DB_URL)
