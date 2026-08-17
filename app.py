@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為純白底與橘色強調條
+# 🌟 全局 CSS：展開面板與上傳區為冷霧灰白，提示框為純白底、保留外框與文字配色
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,8 +97,8 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 指定純白底提示框（背景 #FFFFFF、邊條 #eb612c、文字 #422d13，無漸層、無加深） */
-    div[data-testid="stAlert"] {
+    /* 4. 🌟 純白底提示框（底色 #FFFFFF、邊條 #eb612c、文字 #422d13、保留細框） */
+    div[data-testid="stAlert"], div[data-testid="stAlert"] > div, div[data-baseweb="notification"] {
         background: #ffffff !important;
         background-color: #ffffff !important;
         border: 1px solid #fed7aa !important;
@@ -107,7 +107,7 @@ st.markdown("""
         border-radius: 6px !important;
         box-shadow: none !important;
     }
-    div[data-testid="stAlert"] p {
+    div[data-testid="stAlert"] p, div[data-baseweb="notification"] p {
         color: #422d13 !important;
         font-weight: 600 !important;
     }
@@ -217,7 +217,7 @@ USER_CREDENTIALS = {
     "ZZH-MK": {"password": "ZZH01735", "role": "會計", "clinics": ["彰化院"], "name": "莊雅惠"},
     "KLT-MK": {"password": "KYF00075", "role": "會計", "clinics": ["藍田院", "意凡院"], "name": "郭玉輝"},
     "KYF-MK": {"password": "KYF00075", "role": "會計", "clinics": ["意凡院", "藍田院"], "name": "郭玉輝"},
-    "KDL-MK": {"password": "KDL00024", "role": "會計", "clinics": ["東霖院"], "name": "曾美雲"},
+    "KDL-MK": {"password": "KDL00024", "role": "會計", "clinics": ["東霖院"], "曾美雲": "曾美雲", "name": "曾美雲"},
     "KWJ-MK": {"password": "KSY00327", "role": "會計", "clinics": ["五甲院", "陽明院"], "name": "黃湘蓉"},
     "KYM-MK": {"password": "KSY00327", "role": "會計", "clinics": ["陽明院", "五甲院"], "name": "黃湘蓉"},
     "DTT-MK": {"password": "DTT02078", "role": "會計", "clinics": ["台東院"], "name": "塗婉瑜"},
@@ -675,24 +675,24 @@ else:
             try:
                 hr_uploaded_prsn_df = pd.read_excel(hr_clinic_prsn_file)
                 if '執業類別' in hr_uploaded_prsn_df.columns and '姓名' in hr_uploaded_prsn_df.columns:
-                    nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
-                    hr_file_names = set(nurses_in_file['姓名'].tolist())
+                    hr_nurses_in_file = hr_uploaded_prsn_df[hr_uploaded_prsn_df['執業類別'].isin(['護理師', '護士', '護理人員'])].copy()
+                    hr_file_names = set(hr_nurses_in_file['姓名'].tolist())
                     hr_sys_names = set(hr_clinic_all_df['姓名'].tolist()) if not hr_clinic_all_df.empty else set()
                     hr_nurses_in_file['比對狀態'] = hr_nurses_in_file['姓名'].apply(lambda x: '✅ 已在名冊中' if x in sys_names else '🆕 新執登人員 (系統缺)')
                     
-                    st.info(f"解析到執業清冊共有 **{len(nurses_in_file)}** 位護理人員。清冊比對明細：")
+                    st.info(f"解析到執業清冊共有 **{len(hr_nurses_in_file)}** 位護理人員。清冊比對明細：")
                     hr_display_cols = [c for c in ['姓名', '執業類別', '執業起日', '比對狀態'] if c in hr_nurses_in_file.columns]
                     st.dataframe(hr_nurses_in_file[display_cols], use_container_width=True)
                     
                     hr_extra_in_sys = [name for name in hr_sys_names if name not in hr_file_names]
                     if hr_extra_in_sys:
-                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(hr_extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
+                        st.warning(f"⚠️ **【系統母數異常警示】** 發現有 **{len(extra_in_sys)}** 位系統母數同仁在最新的衛福部清冊中【找不到名字】（疑已離職/退保/異動）：")
                         st.write("疑已退保/離職人員名單：", ", ".join([f"**{n}**" for n in extra_in_sys]))
 
                     hr_new_nurses = hr_nurses_in_file[hr_nurses_in_file['比對狀態'] == '🆕 新執登人員 (系統缺)']
                     if not hr_new_nurses.empty:
                         st.warning(f"偵測到有 **{len(hr_new_nurses)}** 位「🆕 新執登人員」尚未建立於系統名冊中。")
-                        if st.button(f"🚀 一鍵將 {len(hr_new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
+                        if st.button(f"🚀 一鍵將 {len(new_nurses)} 位新執登護理師同步匯入至 [{hr_view_clinic}] 名冊", key="hr_sync_btn"):
                             new_rows = []
                             for _, row in hr_new_nurses.iterrows():
                                 arr_d = str(row.get('執業起日', ''))
@@ -704,7 +704,7 @@ else:
                             merged_staff_df = pd.concat([staff_df, pd.DataFrame(new_rows)], ignore_index=True)
                             save_data(merged_staff_df)
                             st.balloons()
-                            st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(hr_new_nurses)} 位護理人員！")
+                            st.success(f"🎉 成功同步！已為 [{hr_view_clinic}] 新增 {len(new_nurses)} 位護理人員！")
                             st.rerun()
                     elif not extra_in_sys:
                         st.success("🎉 雙向對帳完全相符！衛福部清冊與系統母數 100% 一致！")
