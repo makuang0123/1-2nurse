@@ -15,7 +15,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：互動區保留【海洋藍 3D】，其餘區塊改用【自然雅緻柔和色系】
+# 🌟 全局 CSS：互動區保留【海洋藍 3D】，其餘提示與提示框改用【溫潤米杏色】
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -100,7 +100,21 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 其餘指標與系統卡片：溫潤鼠尾草綠/燕麥灰柔和邊界 */
+    /* 4. 🌟 全面替換系統預設藍色提示框 (st.info)，改為溫潤米杏色 */
+    div[data-testid="stAlert"] {
+        background: linear-gradient(135deg, #fdfbf7 0%, #f7f3eb 100%) !important;
+        border: 1px solid #e5dec9 !important;
+        border-left: 5px solid #bda87f !important;
+        color: #5c4d3c !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+    }
+    div[data-testid="stAlert"] p {
+        color: #5c4d3c !important;
+        font-weight: 500 !important;
+    }
+
+    /* 5. 其餘指標卡片：柔和邊界 */
     div[data-testid="stMetric"] {
         background: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
@@ -548,7 +562,7 @@ else:
                                 "區域": region_name,
                                 "院所": clinic_name,
                                 "姓名": c_name,
-                                "職類別": title,
+                                "執業類別": title,
                                 "身份": "舊有員工",
                                 "到職日": arr_date,
                                 "符合原因": "⚠️ 請選取原因",
