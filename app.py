@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="醫療網護理人員執登與調薪卡控系統", layout="wide")
 
 # -------------------------------------------------------------------
-# 🌟 全局 CSS：精準覆蓋 st.info (純白底、橘色邊條、深褐字)，保留 st.error / st.success 原生顏色
+# 🌟 全局 CSS：精準覆蓋 st.info (純白底、橘色邊條、深褐字)，保留 st.error 原生紅色
 # -------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -97,15 +97,18 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
     }
 
-    /* 4. 🌟 st.info 專屬樣式：純白底 #FFFFFF、橘色左邊條 #eb612c、文字 #422d13 */
+    /* 4. 🌟 強制覆蓋 st.info 為純白底 #FFFFFF、橘色左邊條 #eb612c、文字 #422d13 */
     div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) {
-        background: #ffffff !important;
         background-color: #ffffff !important;
+        background: #ffffff !important;
         border: 1px solid #fed7aa !important;
         border-left: 6px solid #eb612c !important;
-        color: #422d13 !important;
         border-radius: 6px !important;
         box-shadow: none !important;
+    }
+    div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) * {
+        color: #422d13 !important;
+        background-color: transparent !important;
     }
     div.stAlert:has(svg[data-testid="stNotificationIconInfo"]) p {
         color: #422d13 !important;
@@ -612,7 +615,7 @@ else:
 
         next_df = c_all_df[c_all_df['本月離職'] == False] if cur_tot > 0 else pd.DataFrame()
         next_tot = len(next_df)
-        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_tot > 0 else 0
+        next_comp = len(next_df[next_df['符合資格'] == '🟢 符合']) if next_total > 0 else 0
         next_req = math.ceil(next_total / 2) if next_total > 0 else 0
         next_stat = "🟢 預估達標" if (next_comp >= next_req and next_total > 0) else ("⚪ 無資料" if next_total == 0 else "🔴 預估未達標")
         
